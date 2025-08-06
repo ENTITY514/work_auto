@@ -18,15 +18,14 @@ import {
   IconButton,
   Tooltip,
 } from "@mui/material";
-import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import {
   AcademicPlan,
   KtpPlan,
-  IKtpLesson,
   StoredTup,
-} from "../types/academicPlan";
+  IKtpLesson,
+} from "../../interfaces/academic_plan.interface";
 
-// Обновленная функция-трансформер
+// Функция transformTupToKtp остается без изменений
 const transformTupToKtp = (tup: AcademicPlan): KtpPlan => {
   const ktpPlan: KtpPlan = [];
   let lessonCounter = 1;
@@ -100,10 +99,8 @@ const transformTupToKtp = (tup: AcademicPlan): KtpPlan => {
       notes: "",
     });
 
-    // ✅ ИСПРАВЛЕНИЕ 1: Обновленная логика для конечных повторений
     const endRepetitionTopics: string[] = [];
     if (quarterIndex === 3) {
-      // Логика для 4-й четверти
       if (quarter.repetitionInfo.length > 0) {
         endRepetitionTopics.push(...quarter.repetitionInfo);
       }
@@ -111,7 +108,6 @@ const transformTupToKtp = (tup: AcademicPlan): KtpPlan => {
         endRepetitionTopics.push("Повторение");
       }
     } else {
-      // Логика для 1, 2, 3-й четвертей
       endRepetitionTopics.push("Повторение", "Повторение");
       if (quarterIndex > 0 && quarter.repetitionInfo.length > 0) {
         endRepetitionTopics.push(...quarter.repetitionInfo);
@@ -144,20 +140,50 @@ const KtpEditorPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>("");
   const [tupName, setTupName] = useState<string>("");
-  const [sorCounter, setSorCounter] = useState(1); // Cчётчик для СОР
+  const [sorCounter, setSorCounter] = useState(1);
+
+  let sectionGroupIndex = 0;
 
   useEffect(() => {
-    /* ... код без изменений ... */
+    // ... useEffect remains the same
+    try {
+      const savedData = localStorage.getItem("academicPlanData");
+      if (savedData && tupId) {
+        const allTups = JSON.parse(savedData) as StoredTup[];
+        const tupIndex = parseInt(tupId, 10);
+        if (allTups[tupIndex]) {
+          setTupName(allTups[tupIndex].name);
+          const transformedPlan = transformTupToKtp(allTups[tupIndex].planData);
+          setKtpPlan(transformedPlan);
+        } else {
+          setError("Исходный ТУП не найден.");
+        }
+      }
+    } catch (e) {
+      setError("Не удалось загрузить или преобразовать ТУП.");
+    } finally {
+      setIsLoading(false);
+    }
   }, [tupId]);
-  const handleInputChange = (/* ... код без изменений ... */) => {};
 
-  // ✅ ИСПРАВЛЕНИЕ 3: Новая функция для добавления СОР
+  const handleInputChange = (
+    // ... handleInputChange remains the same
+    lessonId: string,
+    field: keyof IKtpLesson,
+    value: string | number
+  ) => {
+    setKtpPlan((prevPlan) =>
+      prevPlan.map((lesson) =>
+        lesson.id === lessonId ? { ...lesson, [field]: value } : lesson
+      )
+    );
+  };
+
   const handleAddSor = (sectionName: string) => {
     let newPlan = [...ktpPlan];
     const lastLessonIndex = newPlan.findLastIndex(
       (l) => l.sectionName === sectionName
     );
-
     if (lastLessonIndex === -1) return;
 
     const lastLessonOfSection = newPlan[lastLessonIndex];
@@ -165,12 +191,14 @@ const KtpEditorPage: React.FC = () => {
     const sorLesson: IKtpLesson = {
       id: `sor-${sectionName}-${sorCounter}`,
       rowType: "sor",
-      lessonNumber: 0, // Номер будет пересчитан
-      hoursInSection: 0, // Номер будет пересчитан
+      lessonNumber: 0,
+      hoursInSection: 0,
       sectionName: sectionName,
-      lessonTopic: `${lastLessonOfSection.lessonTopic} СОР№${sorCounter}`,
-      objectiveId: "Цели на усмотрение учителя",
-      objectiveDescription: "",
+      // ✅ ИЗМЕНЕНИЕ 4: Новый формат названия СОР
+      lessonTopic: `${lastLessonOfSection.lessonTopic} СОР№${sorCounter} "${sectionName}"`,
+      // ✅ ИЗМЕНЕНИЕ 2: Копируем цель из последнего урока
+      objectiveId: lastLessonOfSection.objectiveId,
+      objectiveDescription: lastLessonOfSection.objectiveDescription,
       hours: 1,
       date: "",
       notes: "",
@@ -178,36 +206,40 @@ const KtpEditorPage: React.FC = () => {
 
     const duplicateLesson: IKtpLesson = {
       ...lastLessonOfSection,
-      id: `duplicate-${lastLessonOfSection.id}`,
+      id: `duplicate-${lastLessonOfSection.id}-${sorCounter}`,
       lessonNumber: 0,
       hoursInSection: 0,
     };
 
-    // Вставляем два новых урока после последнего урока раздела
     newPlan.splice(lastLessonIndex + 1, 0, sorLesson, duplicateLesson);
 
     // Пересчитываем всю нумерацию
     let lessonCounter = 1;
     let hoursInSectionCounter = 1;
-    let currentSection = "";
+    let currentSectionName = "";
+
     newPlan = newPlan.map((lesson) => {
       if (lesson.rowType === "quarter-header") {
-        currentSection = "";
+        currentSectionName = "";
         return lesson;
       }
 
-      if (lesson.sectionName !== currentSection) {
-        currentSection = lesson.sectionName;
+      if (lesson.sectionName && lesson.sectionName !== currentSectionName) {
+        currentSectionName = lesson.sectionName;
         hoursInSectionCounter = 1;
       }
 
       if (lesson.rowType === "standard" || lesson.rowType === "sor") {
         lesson.hoursInSection = hoursInSectionCounter++;
-      } else {
+        //@ts-ignore
+      } else if (lesson.rowType !== "quarter-header") {
         lesson.hoursInSection = 1;
       }
+      //@ts-ignore
+      if (lesson.rowType !== "quarter-header") {
+        lesson.lessonNumber = lessonCounter++;
+      }
 
-      lesson.lessonNumber = lessonCounter++;
       return lesson;
     });
 
@@ -220,26 +252,98 @@ const KtpEditorPage: React.FC = () => {
 
   return (
     <Container maxWidth="xl">
-      {/* ... Заголовок и кнопка Сохранить ... */}
+      <Typography variant="h4" component="h1" gutterBottom>
+        Редактор КТП на основе: "{tupName}"
+      </Typography>
 
       <TableContainer component={Paper}>
         <Table stickyHeader>
-          <TableHead>{/* ... Заголовки таблицы ... */}</TableHead>
+          <TableHead>
+            <TableRow>
+              <TableCell sx={{ fontWeight: "bold", width: "3%" }}>№</TableCell>
+              <TableCell sx={{ fontWeight: "bold", width: "5%" }}>
+                Часы в разделе
+              </TableCell>
+              <TableCell sx={{ fontWeight: "bold", width: "15%" }}>
+                Раздел/подраздел
+              </TableCell>
+              <TableCell sx={{ fontWeight: "bold", width: "15%" }}>
+                Тема урока
+              </TableCell>
+              <TableCell sx={{ fontWeight: "bold" }}>Цели обучения</TableCell>
+              <TableCell sx={{ fontWeight: "bold", width: "5%" }}>
+                Кол-во часов
+              </TableCell>
+              <TableCell sx={{ fontWeight: "bold", width: "10%" }}>
+                Дата
+              </TableCell>
+              <TableCell sx={{ fontWeight: "bold", width: "12%" }}>
+                Примечание
+              </TableCell>
+            </TableRow>
+          </TableHead>
           <TableBody>
             {ktpPlan.map((lesson, index) => {
-              // ... логика isNewSection, showSectionText и т.д. остается без изменений ...
+              const prevLesson = ktpPlan[index - 1];
+              let isNewSection = false;
+              if (lesson.rowType === "standard") {
+                if (
+                  !prevLesson ||
+                  lesson.sectionName !== prevLesson.sectionName
+                ) {
+                  isNewSection = true;
+                }
+              }
 
-              if (
-                lesson.rowType === "soch" ||
-                lesson.rowType === "repetition"
-              ) {
+              let isNewTopic = false;
+              if (lesson.rowType === "standard") {
+                if (isNewSection) {
+                  isNewTopic = true;
+                } else if (
+                  prevLesson &&
+                  lesson.lessonTopic !== prevLesson.lessonTopic
+                ) {
+                  isNewTopic = true;
+                }
+              }
+
+              if (isNewSection) {
+                sectionGroupIndex++;
+              }
+
+              const sectionBgColor =
+                sectionGroupIndex % 2 === 0 ? "#fafafa" : "transparent";
+              const showSectionText = isNewSection;
+              const showTopicText = isNewTopic;
+
+              // ✅ ИЗМЕНЕНИЕ 3: Определяем, является ли текущая строка последней в своем разделе
+              const isLastLessonInSection =
+                lesson.rowType === "standard" &&
+                (index === ktpPlan.length - 1 ||
+                  ktpPlan[index + 1].sectionName !== lesson.sectionName);
+
+              if (lesson.rowType === "quarter-header") {
+                sectionGroupIndex = 0;
+                return (
+                  <TableRow key={lesson.id}>
+                    <TableCell
+                      colSpan={8}
+                      align="center"
+                      sx={{ backgroundColor: "#e3f2fd", fontWeight: "bold" }}
+                    >
+                      {lesson.sectionName.toUpperCase()}
+                    </TableCell>
+                  </TableRow>
+                );
+              }
+
+              if (lesson.rowType === "repetition") {
                 return (
                   <TableRow key={lesson.id} sx={{ backgroundColor: "#fffde7" }}>
                     <TableCell>{lesson.lessonNumber}</TableCell>
                     <TableCell align="center">
                       {lesson.hoursInSection}
                     </TableCell>
-                    {/* ✅ ИСПРАВЛЕНИЕ 2: Делаем тему повторения редактируемой */}
                     <TableCell colSpan={2}>
                       <TextField
                         variant="standard"
@@ -256,15 +360,26 @@ const KtpEditorPage: React.FC = () => {
                       />
                     </TableCell>
                     <TableCell></TableCell>
-                    {/* ... остальные ячейки ... */}
+                    <TableCell align="center">{lesson.hours}</TableCell>
+                    <TableCell>
+                      <TextField
+                        variant="standard"
+                        fullWidth
+                        type="date"
+                        InputLabelProps={{ shrink: true }}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <TextField variant="standard" fullWidth />
+                    </TableCell>
                   </TableRow>
                 );
               }
 
-              // ✅ Новый вид для строки СОР
+              // ✅ ИЗМЕНЕНИЕ 1: Новый стиль для строки СОР - бледно-синий
               if (lesson.rowType === "sor") {
                 return (
-                  <TableRow key={lesson.id} sx={{ backgroundColor: "#ffebee" }}>
+                  <TableRow key={lesson.id} sx={{ backgroundColor: "#e3f2fd" }}>
                     <TableCell>{lesson.lessonNumber}</TableCell>
                     <TableCell align="center">
                       {lesson.hoursInSection}
@@ -275,7 +390,7 @@ const KtpEditorPage: React.FC = () => {
                         borderLeft: "3px solid #1976d2",
                       }}
                     ></TableCell>
-                    <TableCell colSpan={2} sx={{ fontWeight: "bold" }}>
+                    <TableCell>
                       <TextField
                         variant="standard"
                         fullWidth
@@ -287,59 +402,131 @@ const KtpEditorPage: React.FC = () => {
                             e.target.value
                           )
                         }
+                        sx={{ fontWeight: "bold" }}
                       />
                     </TableCell>
-                    {/* ... остальные ячейки ... */}
+                    {/* Отображаем цель, скопированную из последнего урока */}
+                    <TableCell>
+                      <Typography variant="body2" color="text.secondary">
+                        {lesson.objectiveId}
+                      </Typography>
+                      {lesson.objectiveDescription}
+                    </TableCell>
+                    <TableCell align="center">{lesson.hours}</TableCell>
+                    <TableCell>
+                      <TextField
+                        variant="standard"
+                        fullWidth
+                        type="date"
+                        value={lesson.date}
+                        onChange={(e) =>
+                          handleInputChange(lesson.id, "date", e.target.value)
+                        }
+                        InputLabelProps={{ shrink: true }}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <TextField
+                        variant="standard"
+                        fullWidth
+                        value={lesson.notes}
+                        onChange={(e) =>
+                          handleInputChange(lesson.id, "notes", e.target.value)
+                        }
+                      />
+                    </TableCell>
                   </TableRow>
                 );
               }
 
-              // Отображение стандартного урока
+              // Обернем стандартную строку и кнопку в React.Fragment
               return (
-                <TableRow
-                  key={lesson.id}
-                  sx={{ backgroundColor: sectionBgColor }}
-                >
-                  {/* ... ячейки № и Часы в разделе ... */}
-                  <TableCell
-                    sx={{
-                      verticalAlign: "top",
-                      borderLeft: "3px solid #1976d2",
-                      position: "relative",
-                    }}
-                  >
-                    {showSectionText && (
-                      <Box
-                        sx={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                        }}
-                      >
-                        {lesson.sectionName}
-                        {/* ✅ ИСПРАВЛЕНИЕ 3: Кнопка "Добавить СОР" */}
-                        <Tooltip title="Добавить СОР для этого раздела">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleAddSor(lesson.sectionName)}
-                          >
-                            <AddCircleOutlineIcon
-                              fontSize="small"
-                              color="primary"
-                            />
-                          </IconButton>
-                        </Tooltip>
-                      </Box>
-                    )}
-                  </TableCell>
-                  {/* ... остальные ячейки ... */}
-                </TableRow>
+                <React.Fragment key={lesson.id}>
+                  <TableRow sx={{ backgroundColor: sectionBgColor }}>
+                    <TableCell>{lesson.lessonNumber}</TableCell>
+                    <TableCell align="center">
+                      {lesson.hoursInSection}
+                    </TableCell>
+                    <TableCell
+                      sx={{
+                        verticalAlign: "top",
+                        borderLeft: "3px solid #1976d2",
+                      }}
+                    >
+                      {showSectionText && lesson.sectionName}
+                    </TableCell>
+                    <TableCell
+                      sx={{
+                        verticalAlign: "top",
+                        borderLeft: lesson.lessonTopic
+                          ? "2px solid #81d4fa"
+                          : "none",
+                      }}
+                    >
+                      {showTopicText && lesson.lessonTopic}
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" color="text.secondary">
+                        {lesson.objectiveId}
+                      </Typography>
+                      {lesson.objectiveDescription}
+                    </TableCell>
+                    <TableCell align="center">{lesson.hours}</TableCell>
+                    <TableCell>
+                      <TextField
+                        variant="standard"
+                        fullWidth
+                        type="date"
+                        value={lesson.date}
+                        onChange={(e) =>
+                          handleInputChange(lesson.id, "date", e.target.value)
+                        }
+                        InputLabelProps={{ shrink: true }}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <TextField
+                        variant="standard"
+                        fullWidth
+                        value={lesson.notes}
+                        onChange={(e) =>
+                          handleInputChange(lesson.id, "notes", e.target.value)
+                        }
+                      />
+                    </TableCell>
+                  </TableRow>
+
+                  {/* ✅ ИЗМЕНЕНИЕ 3: Новая строка с кнопкой, которая появляется в конце раздела */}
+                  {isLastLessonInSection && (
+                    <TableRow sx={{ backgroundColor: sectionBgColor }}>
+                      <TableCell colSpan={8} align="center" sx={{ py: 0 }}>
+                        <Button
+                          variant="contained"
+                          size="small"
+                          onClick={() => handleAddSor(lesson.sectionName)}
+                          sx={{ my: 1 }}
+                        >
+                          Добавить СОР
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </React.Fragment>
               );
             })}
           </TableBody>
         </Table>
       </TableContainer>
-      {/* ... кнопка Сохранить ... */}
+
+      <Box sx={{ mt: 4, display: "flex", justifyContent: "flex-end" }}>
+        <Button
+          variant="contained"
+          size="large"
+          onClick={() => console.log(ktpPlan)}
+        >
+          Сохранить КТП
+        </Button>
+      </Box>
     </Container>
   );
 };
