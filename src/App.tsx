@@ -1,25 +1,24 @@
-import React from 'react';
-import logo from './logo.svg';
-import './App.css';
+import React from "react";
+import { Routes, Route } from "react-router-dom";
+import { Box } from "@mui/material";
+import Header from "./components/Header/header";
+import KtpEditorPage from "./pages/ktpEditorPage/page";
+import KtpPage from "./pages/ktpPage/page";
+import TupViewPage from "./pages/tupViewPage/page";
 
 function App() {
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.tsx</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
+    <>
+      <Header />
+      <Box component="main" sx={{ p: 3 }}>
+        <Routes>
+          <Route path="/" element={<KtpPage />} />
+          <Route path="/ktp" element={<KtpPage />} />
+          <Route path="/tup/:tupId" element={<TupViewPage />} />
+          <Route path="/ktp-editor/:tupId" element={<KtpEditorPage />} />
+        </Routes>
+      </Box>
+    </>
   );
 }
 
