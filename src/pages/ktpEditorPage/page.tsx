@@ -18,6 +18,15 @@ import {
   IconButton,
   Tooltip,
 } from "@mui/material";
+import AddIcon from "@mui/icons-material/Add";
+import RemoveIcon from "@mui/icons-material/Remove";
+import { DndContext, closestCenter, DragEndEvent } from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { SortableTableRow } from "../../components/sortableTableRow/sortableTableRow";
 import {
   AcademicPlan,
   KtpPlan,
@@ -134,6 +143,38 @@ const transformTupToKtp = (tup: AcademicPlan): KtpPlan => {
   return ktpPlan;
 };
 
+// Функция renumberPlan остается без изменений
+const renumberPlan = (plan: KtpPlan): KtpPlan => {
+  let lessonCounter = 1;
+  let hoursInSectionCounter = 1;
+  let currentSectionName = "";
+
+  return plan.map((lesson) => {
+    if (lesson.rowType === "quarter-header") {
+      currentSectionName = "";
+      return lesson;
+    }
+
+    if (lesson.sectionName && lesson.sectionName !== currentSectionName) {
+      currentSectionName = lesson.sectionName;
+      hoursInSectionCounter = 1;
+    }
+
+    if (lesson.rowType === "standard" || lesson.rowType === "sor") {
+      lesson.hoursInSection = hoursInSectionCounter++;
+      //@ts-ignore
+    } else if (lesson.rowType !== "quarter-header") {
+      lesson.hoursInSection = 1;
+    }
+    //@ts-ignore
+    if (lesson.rowType !== "quarter-header") {
+      lesson.lessonNumber = lessonCounter++;
+    }
+
+    return { ...lesson };
+  });
+};
+
 const KtpEditorPage: React.FC = () => {
   const { tupId } = useParams<{ tupId: string }>();
   const [ktpPlan, setKtpPlan] = useState<KtpPlan>([]);
@@ -142,10 +183,22 @@ const KtpEditorPage: React.FC = () => {
   const [tupName, setTupName] = useState<string>("");
   const [sorCounter, setSorCounter] = useState(1);
 
-  let sectionGroupIndex = 0;
+  // ✅ ИЗМЕНЕНИЕ 2: Сделаем handleInputChange более универсальным, чтобы он принимал и числа.
+  // Это нужно для полей, которые не являются текстовыми, но могут измениться.
+  const handleInputChange = (
+    lessonId: string,
+    field: keyof IKtpLesson,
+    value: string | number
+  ) => {
+    setKtpPlan((prevPlan) =>
+      prevPlan.map((lesson) =>
+        lesson.id === lessonId ? { ...lesson, [field]: value } : lesson
+      )
+    );
+  };
 
+  // useEffect и другие хендлеры остаются без изменений
   useEffect(() => {
-    // ... useEffect remains the same
     try {
       const savedData = localStorage.getItem("academicPlanData");
       if (savedData && tupId) {
@@ -166,24 +219,12 @@ const KtpEditorPage: React.FC = () => {
     }
   }, [tupId]);
 
-  const handleInputChange = (
-    // ... handleInputChange remains the same
-    lessonId: string,
-    field: keyof IKtpLesson,
-    value: string | number
-  ) => {
-    setKtpPlan((prevPlan) =>
-      prevPlan.map((lesson) =>
-        lesson.id === lessonId ? { ...lesson, [field]: value } : lesson
-      )
-    );
-  };
-
   const handleAddSor = (sectionName: string) => {
     let newPlan = [...ktpPlan];
     const lastLessonIndex = newPlan.findLastIndex(
       (l) => l.sectionName === sectionName
     );
+
     if (lastLessonIndex === -1) return;
 
     const lastLessonOfSection = newPlan[lastLessonIndex];
@@ -194,9 +235,7 @@ const KtpEditorPage: React.FC = () => {
       lessonNumber: 0,
       hoursInSection: 0,
       sectionName: sectionName,
-      // ✅ ИЗМЕНЕНИЕ 4: Новый формат названия СОР
-      lessonTopic: `${lastLessonOfSection.lessonTopic} СОР№${sorCounter} "${sectionName}"`,
-      // ✅ ИЗМЕНЕНИЕ 2: Копируем цель из последнего урока
+      lessonTopic: `${lastLessonOfSection.lessonTopic} СОР№${sorCounter}`,
       objectiveId: lastLessonOfSection.objectiveId,
       objectiveDescription: lastLessonOfSection.objectiveDescription,
       hours: 1,
@@ -212,39 +251,42 @@ const KtpEditorPage: React.FC = () => {
     };
 
     newPlan.splice(lastLessonIndex + 1, 0, sorLesson, duplicateLesson);
-
-    // Пересчитываем всю нумерацию
-    let lessonCounter = 1;
-    let hoursInSectionCounter = 1;
-    let currentSectionName = "";
-
-    newPlan = newPlan.map((lesson) => {
-      if (lesson.rowType === "quarter-header") {
-        currentSectionName = "";
-        return lesson;
-      }
-
-      if (lesson.sectionName && lesson.sectionName !== currentSectionName) {
-        currentSectionName = lesson.sectionName;
-        hoursInSectionCounter = 1;
-      }
-
-      if (lesson.rowType === "standard" || lesson.rowType === "sor") {
-        lesson.hoursInSection = hoursInSectionCounter++;
-        //@ts-ignore
-      } else if (lesson.rowType !== "quarter-header") {
-        lesson.hoursInSection = 1;
-      }
-      //@ts-ignore
-      if (lesson.rowType !== "quarter-header") {
-        lesson.lessonNumber = lessonCounter++;
-      }
-
-      return lesson;
-    });
-
-    setKtpPlan(newPlan);
+    setKtpPlan(renumberPlan(newPlan));
     setSorCounter((prev) => prev + 1);
+  };
+
+  const handleAddHour = (lessonId: string) => {
+    const lessonIndex = ktpPlan.findIndex((l) => l.id === lessonId);
+    if (lessonIndex === -1) return;
+
+    const originalLesson = ktpPlan[lessonIndex];
+    const newHour: IKtpLesson = {
+      ...originalLesson,
+      id: `${originalLesson.id}-hour-${Date.now()}`,
+      date: "",
+      notes: "",
+    };
+
+    let newPlan = [...ktpPlan];
+    newPlan.splice(lessonIndex + 1, 0, newHour);
+    setKtpPlan(renumberPlan(newPlan));
+  };
+
+  const handleDeleteHour = (lessonId: string) => {
+    const newPlan = ktpPlan.filter((l) => l.id !== lessonId);
+    setKtpPlan(renumberPlan(newPlan));
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      setKtpPlan((plan) => {
+        const oldIndex = plan.findIndex((item) => item.id === active.id);
+        const newIndex = plan.findIndex((item) => item.id === over.id);
+        const newPlan = arrayMove(plan, oldIndex, newIndex);
+        return renumberPlan(newPlan);
+      });
+    }
   };
 
   if (isLoading) return <CircularProgress />;
@@ -257,265 +299,359 @@ const KtpEditorPage: React.FC = () => {
       </Typography>
 
       <TableContainer component={Paper}>
-        <Table stickyHeader>
-          <TableHead>
-            <TableRow>
-              <TableCell sx={{ fontWeight: "bold", width: "3%" }}>№</TableCell>
-              <TableCell sx={{ fontWeight: "bold", width: "5%" }}>
-                Часы в разделе
-              </TableCell>
-              <TableCell sx={{ fontWeight: "bold", width: "15%" }}>
-                Раздел/подраздел
-              </TableCell>
-              <TableCell sx={{ fontWeight: "bold", width: "15%" }}>
-                Тема урока
-              </TableCell>
-              <TableCell sx={{ fontWeight: "bold" }}>Цели обучения</TableCell>
-              <TableCell sx={{ fontWeight: "bold", width: "5%" }}>
-                Кол-во часов
-              </TableCell>
-              <TableCell sx={{ fontWeight: "bold", width: "10%" }}>
-                Дата
-              </TableCell>
-              <TableCell sx={{ fontWeight: "bold", width: "12%" }}>
-                Примечание
-              </TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {ktpPlan.map((lesson, index) => {
-              const prevLesson = ktpPlan[index - 1];
-              let isNewSection = false;
-              if (lesson.rowType === "standard") {
-                if (
-                  !prevLesson ||
-                  lesson.sectionName !== prevLesson.sectionName
-                ) {
-                  isNewSection = true;
-                }
-              }
+        <DndContext
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={ktpPlan.map((item) => item.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            <Table stickyHeader>
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ fontWeight: "bold", width: "3%" }}>
+                    №
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: "bold", width: "5%" }}>
+                    Часы в разделе
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: "bold", width: "15%" }}>
+                    Раздел/подраздел
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: "bold", width: "15%" }}>
+                    Тема урока
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: "bold" }}>
+                    Цели обучения
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: "bold", width: "5%" }}>
+                    Кол-во часов
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: "bold", width: "10%" }}>
+                    Дата
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: "bold", width: "12%" }}>
+                    Примечание
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: "bold", width: "8%" }}>
+                    Действия
+                  </TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {ktpPlan.map((lesson, index) => {
+                  const prevLesson = ktpPlan[index - 1];
+                  let isNewSection = false,
+                    isNewTopic = false,
+                    isNewObjective = false;
 
-              let isNewTopic = false;
-              if (lesson.rowType === "standard") {
-                if (isNewSection) {
-                  isNewTopic = true;
-                } else if (
-                  prevLesson &&
-                  lesson.lessonTopic !== prevLesson.lessonTopic
-                ) {
-                  isNewTopic = true;
-                }
-              }
+                  if (
+                    lesson.rowType === "standard" ||
+                    lesson.rowType === "sor"
+                  ) {
+                    if (
+                      !prevLesson ||
+                      lesson.sectionName !== prevLesson.sectionName
+                    ) {
+                      isNewSection = true;
+                    }
+                    if (
+                      isNewSection ||
+                      !prevLesson ||
+                      lesson.lessonTopic !== prevLesson.lessonTopic
+                    ) {
+                      isNewTopic = true;
+                    }
+                    if (
+                      isNewTopic ||
+                      !prevLesson ||
+                      lesson.objectiveId !== prevLesson.objectiveId
+                    ) {
+                      isNewObjective = true;
+                    }
+                  }
 
-              if (isNewSection) {
-                sectionGroupIndex++;
-              }
+                  // Логика для отображения кнопки "Добавить СОР"
+                  const isLastLessonInSection =
+                    lesson.rowType === "standard" &&
+                    (!ktpPlan[index + 1] ||
+                      ktpPlan[index + 1].sectionName !== lesson.sectionName);
 
-              const sectionBgColor =
-                sectionGroupIndex % 2 === 0 ? "#fafafa" : "transparent";
-              const showSectionText = isNewSection;
-              const showTopicText = isNewTopic;
+                  const objectiveHourCount = ktpPlan.filter(
+                    (l) => l.objectiveId === lesson.objectiveId && l.objectiveId
+                  ).length;
 
-              // ✅ ИЗМЕНЕНИЕ 3: Определяем, является ли текущая строка последней в своем разделе
-              const isLastLessonInSection =
-                lesson.rowType === "standard" &&
-                (index === ktpPlan.length - 1 ||
-                  ktpPlan[index + 1].sectionName !== lesson.sectionName);
-
-              if (lesson.rowType === "quarter-header") {
-                sectionGroupIndex = 0;
-                return (
-                  <TableRow key={lesson.id}>
-                    <TableCell
-                      colSpan={8}
-                      align="center"
-                      sx={{ backgroundColor: "#e3f2fd", fontWeight: "bold" }}
-                    >
-                      {lesson.sectionName.toUpperCase()}
-                    </TableCell>
-                  </TableRow>
-                );
-              }
-
-              if (lesson.rowType === "repetition") {
-                return (
-                  <TableRow key={lesson.id} sx={{ backgroundColor: "#fffde7" }}>
-                    <TableCell>{lesson.lessonNumber}</TableCell>
-                    <TableCell align="center">
-                      {lesson.hoursInSection}
-                    </TableCell>
-                    <TableCell colSpan={2}>
-                      <TextField
-                        variant="standard"
-                        fullWidth
-                        value={lesson.lessonTopic}
-                        onChange={(e) =>
-                          handleInputChange(
-                            lesson.id,
-                            "lessonTopic",
-                            e.target.value
-                          )
-                        }
-                        sx={{ fontWeight: "bold" }}
-                      />
-                    </TableCell>
-                    <TableCell></TableCell>
-                    <TableCell align="center">{lesson.hours}</TableCell>
-                    <TableCell>
-                      <TextField
-                        variant="standard"
-                        fullWidth
-                        type="date"
-                        InputLabelProps={{ shrink: true }}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <TextField variant="standard" fullWidth />
-                    </TableCell>
-                  </TableRow>
-                );
-              }
-
-              // ✅ ИЗМЕНЕНИЕ 1: Новый стиль для строки СОР - бледно-синий
-              if (lesson.rowType === "sor") {
-                return (
-                  <TableRow key={lesson.id} sx={{ backgroundColor: "#e3f2fd" }}>
-                    <TableCell>{lesson.lessonNumber}</TableCell>
-                    <TableCell align="center">
-                      {lesson.hoursInSection}
-                    </TableCell>
-                    <TableCell
-                      sx={{
-                        verticalAlign: "top",
-                        borderLeft: "3px solid #1976d2",
-                      }}
-                    ></TableCell>
-                    <TableCell>
-                      <TextField
-                        variant="standard"
-                        fullWidth
-                        value={lesson.lessonTopic}
-                        onChange={(e) =>
-                          handleInputChange(
-                            lesson.id,
-                            "lessonTopic",
-                            e.target.value
-                          )
-                        }
-                        sx={{ fontWeight: "bold" }}
-                      />
-                    </TableCell>
-                    {/* Отображаем цель, скопированную из последнего урока */}
-                    <TableCell>
-                      <Typography variant="body2" color="text.secondary">
-                        {lesson.objectiveId}
-                      </Typography>
-                      {lesson.objectiveDescription}
-                    </TableCell>
-                    <TableCell align="center">{lesson.hours}</TableCell>
-                    <TableCell>
-                      <TextField
-                        variant="standard"
-                        fullWidth
-                        type="date"
-                        value={lesson.date}
-                        onChange={(e) =>
-                          handleInputChange(lesson.id, "date", e.target.value)
-                        }
-                        InputLabelProps={{ shrink: true }}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <TextField
-                        variant="standard"
-                        fullWidth
-                        value={lesson.notes}
-                        onChange={(e) =>
-                          handleInputChange(lesson.id, "notes", e.target.value)
-                        }
-                      />
-                    </TableCell>
-                  </TableRow>
-                );
-              }
-
-              // Обернем стандартную строку и кнопку в React.Fragment
-              return (
-                <React.Fragment key={lesson.id}>
-                  <TableRow sx={{ backgroundColor: sectionBgColor }}>
-                    <TableCell>{lesson.lessonNumber}</TableCell>
-                    <TableCell align="center">
-                      {lesson.hoursInSection}
-                    </TableCell>
-                    <TableCell
-                      sx={{
-                        verticalAlign: "top",
-                        borderLeft: "3px solid #1976d2",
-                      }}
-                    >
-                      {showSectionText && lesson.sectionName}
-                    </TableCell>
-                    <TableCell
-                      sx={{
-                        verticalAlign: "top",
-                        borderLeft: lesson.lessonTopic
-                          ? "2px solid #81d4fa"
-                          : "none",
-                      }}
-                    >
-                      {showTopicText && lesson.lessonTopic}
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" color="text.secondary">
-                        {lesson.objectiveId}
-                      </Typography>
-                      {lesson.objectiveDescription}
-                    </TableCell>
-                    <TableCell align="center">{lesson.hours}</TableCell>
-                    <TableCell>
-                      <TextField
-                        variant="standard"
-                        fullWidth
-                        type="date"
-                        value={lesson.date}
-                        onChange={(e) =>
-                          handleInputChange(lesson.id, "date", e.target.value)
-                        }
-                        InputLabelProps={{ shrink: true }}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <TextField
-                        variant="standard"
-                        fullWidth
-                        value={lesson.notes}
-                        onChange={(e) =>
-                          handleInputChange(lesson.id, "notes", e.target.value)
-                        }
-                      />
-                    </TableCell>
-                  </TableRow>
-
-                  {/* ✅ ИЗМЕНЕНИЕ 3: Новая строка с кнопкой, которая появляется в конце раздела */}
-                  {isLastLessonInSection && (
-                    <TableRow sx={{ backgroundColor: sectionBgColor }}>
-                      <TableCell colSpan={8} align="center" sx={{ py: 0 }}>
-                        <Button
-                          variant="contained"
-                          size="small"
-                          onClick={() => handleAddSor(lesson.sectionName)}
-                          sx={{ my: 1 }}
+                  // Заголовок четверти
+                  if (lesson.rowType === "quarter-header") {
+                    return (
+                      <TableRow key={lesson.id}>
+                        <TableCell
+                          colSpan={9}
+                          align="center"
+                          sx={{
+                            backgroundColor: "#e3f2fd",
+                            fontWeight: "bold",
+                          }}
                         >
-                          Добавить СОР
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </React.Fragment>
-              );
-            })}
-          </TableBody>
-        </Table>
+                          {(lesson.sectionName || "").toUpperCase()}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  }
+
+                  // СОЧ и Повторение
+                  if (
+                    lesson.rowType === "soch" ||
+                    lesson.rowType === "repetition"
+                  ) {
+                    return (
+                      <TableRow
+                        key={lesson.id}
+                        sx={{ backgroundColor: "#fffde7" }}
+                      >
+                        <TableCell>{lesson.lessonNumber}</TableCell>
+                        <TableCell align="center">
+                          {lesson.hoursInSection}
+                        </TableCell>
+                        <TableCell colSpan={2}>
+                          <TextField
+                            variant="standard"
+                            fullWidth
+                            value={lesson.lessonTopic}
+                            onChange={(e) =>
+                              handleInputChange(
+                                lesson.id,
+                                "lessonTopic",
+                                e.target.value
+                              )
+                            }
+                            sx={{ fontWeight: "bold" }}
+                          />
+                        </TableCell>
+                        <TableCell></TableCell>
+                        <TableCell align="center">{lesson.hours}</TableCell>
+                        <TableCell>
+                          <TextField
+                            variant="standard"
+                            fullWidth
+                            type="date"
+                            InputLabelProps={{ shrink: true }}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <TextField variant="standard" fullWidth />
+                        </TableCell>
+                        <TableCell></TableCell>
+                      </TableRow>
+                    );
+                  }
+
+                  // СОР
+                  if (lesson.rowType === "sor") {
+                    return (
+                      <SortableTableRow
+                        key={lesson.id}
+                        id={lesson.id}
+                        sx={{ backgroundColor: "#e3f2fd" }}
+                      >
+                        <TableCell>{lesson.lessonNumber}</TableCell>
+                        <TableCell align="center">
+                          {lesson.hoursInSection}
+                        </TableCell>
+                        <TableCell
+                          sx={{
+                            verticalAlign: "top",
+                            borderLeft: "3px solid #1976d2",
+                          }}
+                        />
+                        <TableCell>
+                          <TextField
+                            variant="standard"
+                            fullWidth
+                            value={lesson.lessonTopic}
+                            onChange={(e) =>
+                              handleInputChange(
+                                lesson.id,
+                                "lessonTopic",
+                                e.target.value
+                              )
+                            }
+                            sx={{ fontWeight: "bold" }}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" color="text.secondary">
+                            {lesson.objectiveId}
+                          </Typography>
+                          {lesson.objectiveDescription}
+                        </TableCell>
+                        <TableCell align="center">{lesson.hours}</TableCell>
+                        <TableCell>
+                          <TextField
+                            variant="standard"
+                            fullWidth
+                            type="date"
+                            value={lesson.date}
+                            onChange={(e) =>
+                              handleInputChange(
+                                lesson.id,
+                                "date",
+                                e.target.value
+                              )
+                            }
+                            InputLabelProps={{ shrink: true }}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <TextField
+                            variant="standard"
+                            fullWidth
+                            value={lesson.notes}
+                            onChange={(e) =>
+                              handleInputChange(
+                                lesson.id,
+                                "notes",
+                                e.target.value
+                              )
+                            }
+                          />
+                        </TableCell>
+                        <TableCell></TableCell>
+                      </SortableTableRow>
+                    );
+                  }
+
+                  // Стандартный урок + кнопка "Добавить СОР"
+                  return (
+                    <React.Fragment key={lesson.id}>
+                      <SortableTableRow id={lesson.id}>
+                        <TableCell>{lesson.lessonNumber}</TableCell>
+                        <TableCell align="center">
+                          {lesson.hoursInSection}
+                        </TableCell>
+                        <TableCell
+                          sx={{
+                            verticalAlign: "top",
+                            borderLeft: "3px solid #1976d2",
+                          }}
+                        >
+                          {isNewSection && lesson.sectionName}
+                        </TableCell>
+                        <TableCell
+                          sx={{
+                            verticalAlign: "top",
+                            borderLeft: isNewTopic
+                              ? "2px solid #81d4fa"
+                              : "none",
+                          }}
+                        >
+                          {isNewTopic && lesson.lessonTopic}
+                        </TableCell>
+                        <TableCell
+                          sx={{
+                            verticalAlign: "top",
+                            borderLeft: isNewObjective
+                              ? "1px solid #c5cae9"
+                              : "none",
+                          }}
+                        >
+                          {isNewObjective && (
+                            <>
+                              <Typography
+                                variant="body2"
+                                color="text.secondary"
+                              >
+                                {lesson.objectiveId}
+                              </Typography>
+                              {lesson.objectiveDescription}
+                            </>
+                          )}
+                        </TableCell>
+                        <TableCell align="center">{lesson.hours}</TableCell>
+                        <TableCell>
+                          <TextField
+                            variant="standard"
+                            fullWidth
+                            type="date"
+                            value={lesson.date}
+                            onChange={(e) =>
+                              handleInputChange(
+                                lesson.id,
+                                "date",
+                                e.target.value
+                              )
+                            }
+                            InputLabelProps={{ shrink: true }}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <TextField
+                            variant="standard"
+                            fullWidth
+                            value={lesson.notes}
+                            onChange={(e) =>
+                              handleInputChange(
+                                lesson.id,
+                                "notes",
+                                e.target.value
+                              )
+                            }
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Tooltip title="Добавить час">
+                            <IconButton
+                              size="small"
+                              onClick={() => handleAddHour(lesson.id)}
+                            >
+                              <AddIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Удалить час">
+                            <span>
+                              <IconButton
+                                size="small"
+                                onClick={() => handleDeleteHour(lesson.id)}
+                                disabled={objectiveHourCount <= 1}
+                              >
+                                <RemoveIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        </TableCell>
+                      </SortableTableRow>
+
+                      {/* Блок, который рендерит кнопку в конце раздела */}
+                      {isLastLessonInSection && (
+                        <TableRow>
+                          <TableCell
+                            colSpan={9}
+                            align="center"
+                            sx={{
+                              py: 0,
+                              border: 0,
+                              backgroundColor: "#fafafa",
+                            }}
+                          >
+                            <Button
+                              variant="contained"
+                              size="small"
+                              onClick={() => handleAddSor(lesson.sectionName)}
+                              sx={{ my: 1 }}
+                            >
+                              Добавить СОР
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </SortableContext>
+        </DndContext>
       </TableContainer>
 
       <Box sx={{ mt: 4, display: "flex", justifyContent: "flex-end" }}>

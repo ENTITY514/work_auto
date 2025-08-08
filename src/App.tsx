@@ -5,6 +5,7 @@ import Header from "./components/Header/header";
 import KtpEditorPage from "./pages/ktpEditorPage/page";
 import KtpPage from "./pages/ktpPage/page";
 import TupViewPage from "./pages/tupViewPage/page";
+import GradeAnalyzerPage from "./pages/gradeAnalyzatorPage/page";
 
 function App() {
   return (
@@ -16,6 +17,8 @@ function App() {
           <Route path="/ktp" element={<KtpPage />} />
           <Route path="/tup/:tupId" element={<TupViewPage />} />
           <Route path="/ktp-editor/:tupId" element={<KtpEditorPage />} />
+          {/* ✅ Новый маршрут для анализатора журнала */}
+          <Route path="/grade-analyzer" element={<GradeAnalyzerPage />} />
         </Routes>
       </Box>
     </>

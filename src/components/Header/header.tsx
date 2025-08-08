@@ -36,6 +36,10 @@ const Header: React.FC = () => {
           <Button color="inherit" component={RouterLink} to="/ktp">
             КТП
           </Button>
+
+          <Button color="inherit" component={RouterLink} to="/grade-analyzer">
+            Анализ журнала
+          </Button>
           {/* Здесь можно будет добавить другие ссылки, например, "Настройки" */}
         </Box>
       </Toolbar>
