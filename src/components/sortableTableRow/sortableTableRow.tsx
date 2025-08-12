@@ -1,14 +1,22 @@
 import React from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { TableRow } from "@mui/material";
-// ✅ 1. Импортируем типы для sx пропа
-import { SxProps, Theme } from "@mui/material/styles";
+import { TableRow, TableCell, SxProps, Theme, styled } from "@mui/material";
+import DragHandleIcon from "@mui/icons-material/DragHandle";
+
+// Создаем компонент-ручку для перетаскивания
+const DragHandle = styled("div")({
+  cursor: "grab",
+  padding: "8px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  height: "100%",
+});
 
 interface SortableTableRowProps {
   children: React.ReactNode;
   id: string;
-  // ✅ 2. Добавляем sx в список разрешенных пропсов
   sx?: SxProps<Theme>;
 }
 
@@ -32,20 +40,26 @@ export const SortableTableRow: React.FC<SortableTableRowProps> = ({
     opacity: isDragging ? 0.8 : 1,
     zIndex: isDragging ? 1 : 0,
     position: "relative",
-    // Если ячейки в строке смещаются, добавьте эту строку
     display: "table-row",
     width: "100%",
   };
 
+  const handleDragClick = (event: React.MouseEvent) => {
+    // Останавливаем распространение события, чтобы не запускать dnd-kit при клике
+    event.stopPropagation();
+  };
+
   return (
-    // ✅ 3. Принимаем sx и передаем его в TableRow
-    <TableRow
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      {...listeners}
-      sx={sx}
-    >
+    <TableRow ref={setNodeRef} style={style} sx={sx} {...attributes}>
+      <TableCell
+        sx={{ cursor: "grab" }}
+        {...listeners}
+        onClick={handleDragClick}
+      >
+        <DragHandle>
+          <DragHandleIcon fontSize="small" />
+        </DragHandle>
+      </TableCell>
       {children}
     </TableRow>
   );

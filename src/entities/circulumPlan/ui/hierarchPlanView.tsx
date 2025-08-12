@@ -1,7 +1,7 @@
 import React from "react";
 import { Box, Typography, Paper } from "@mui/material";
 import SubdirectoryArrowRightIcon from "@mui/icons-material/SubdirectoryArrowRight";
-import { AcademicPlan } from "../../interfaces/academic_plan.interface";
+import { AcademicPlan } from "../model/types";
 
 interface HierarchicalPlanViewProps {
   data: AcademicPlan;

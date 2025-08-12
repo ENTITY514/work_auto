@@ -1,35 +1,29 @@
-import React, { useState, useCallback } from "react";
+// src/shared/api/academicPlanParser.ts
+
 import * as XLSX from "xlsx";
-import { Typography } from "@mui/material";
 import {
   AcademicPlan,
   Quarter,
   LearningSection,
   LearningTopic,
   LearningObjective,
-} from "../../interfaces/academic_plan.interface";
-import FileUploaderUI from "../../modules/FileUploaderUI";
+} from "../../entities/circulumPlan/model/types";
 
 const REGEX_QUARTER = /(^\d+) четверть/i;
 const REGEX_REPETITION = /повторение/i;
 const REGEX_OBJECTIVE = /(^[\d\.]+)\s(.+)/;
 
-interface FileUploadContainerProps {
-  onUploadSuccess: (data: AcademicPlan) => void;
-}
-
-const FileUploadContainer: React.FC<FileUploadContainerProps> = ({
-  onUploadSuccess,
-}) => {
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [isUploaded, setIsUploaded] = useState(false);
-
-  const parseXLSX = (file: File) => {
+export const parseAcademicPlan = (file: File): Promise<AcademicPlan> => {
+  return new Promise((resolve, reject) => {
     const reader = new FileReader();
+
     reader.onload = (e) => {
       try {
         const data = e.target?.result;
+        if (!data) {
+          throw new Error("Не удалось прочитать файл.");
+        }
+
         const workbook = XLSX.read(data, { type: "buffer" });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
@@ -102,7 +96,6 @@ const FileUploadContainer: React.FC<FileUploadContainerProps> = ({
             }
           }
 
-          // ✅ ИЗМЕНЕНИЕ: Добавлена проверка на длину имени темы (> 2 символов)
           if (
             currentSection &&
             colB &&
@@ -128,45 +121,20 @@ const FileUploadContainer: React.FC<FileUploadContainerProps> = ({
         }
 
         if (plan.length === 0) {
-          throw new Error(
-            "Не удалось найти '1-четверть'. Проверьте, что эта надпись есть в первом столбце."
-          );
+          throw new Error("Структура файла не соответствует шаблону ТУП.");
         }
 
-        localStorage.setItem("academicPlanData", JSON.stringify(plan));
-        setIsUploaded(true);
-        setError(null);
-        onUploadSuccess(plan);
-        alert("План успешно загружен и структурирован!");
+        resolve(plan);
       } catch (err: any) {
         console.error("Критическая ошибка парсинга:", err);
-        setError(err.message || "Не удалось обработать файл.");
-        setIsUploaded(false);
+        reject(err.message || "Не удалось обработать файл.");
       }
     };
+
+    reader.onerror = (err) => {
+      reject(new Error("Ошибка чтения файла."));
+    };
+
     reader.readAsArrayBuffer(file);
-  };
-
-  const handleFileSelect = useCallback((file: File) => {
-    setSelectedFile(file);
-    setIsUploaded(false);
-    parseXLSX(file);
-  }, []);
-
-  return (
-    <>
-      <FileUploaderUI
-        onFileSelect={handleFileSelect}
-        selectedFile={selectedFile}
-        isUploaded={isUploaded}
-      />
-      {error && (
-        <Typography color="error" sx={{ mt: 2 }}>
-          {error}
-        </Typography>
-      )}
-    </>
-  );
+  });
 };
-
-export default FileUploadContainer;
