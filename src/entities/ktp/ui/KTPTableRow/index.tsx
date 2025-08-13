@@ -5,12 +5,13 @@ import {
   Tooltip,
   styled,
   TableRow,
+  Box,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import RemoveIcon from "@mui/icons-material/Remove";
 import { SortableTableRow } from "../../../../components/sortableTableRow/sortableTableRow";
 import { useAppDispatch } from "../../../../shared/lib/hooks";
-import { updateLesson, addHour, deleteLesson } from "../../model/slice";
+import { updateLesson, addHour, deleteLesson, addSor } from "../../model/slice";
 import { IKtpLesson, LessonRowType, KtpPlan } from "../../model/types";
 
 interface KtpTableRowProps {
@@ -74,15 +75,11 @@ export const KtpTableRow: React.FC<KtpTableRowProps> = ({
   plan,
 }) => {
   const dispatch = useAppDispatch();
-
-  // Состояния для отслеживания режима редактирования
   const [isEditingSectionName, setIsEditingSectionName] = React.useState(false);
   const [isEditingLessonTopic, setIsEditingLessonTopic] = React.useState(false);
   const [isEditingObjective, setIsEditingObjective] = React.useState(false);
   const [isEditingDate, setIsEditingDate] = React.useState(false);
   const [isEditingNotes, setIsEditingNotes] = React.useState(false);
-
-  // Локальные состояния для текста
   const [localSectionName, setLocalSectionName] = React.useState(
     lesson.sectionName
   );
@@ -165,7 +162,7 @@ export const KtpTableRow: React.FC<KtpTableRowProps> = ({
     field: keyof IKtpLesson
   ) => {
     if (event.key === "Enter") {
-      event.currentTarget.blur(); // Снимаем фокус с инпута, что вызовет handleInputBlur
+      event.currentTarget.blur();
     }
   };
 
@@ -209,17 +206,28 @@ export const KtpTableRow: React.FC<KtpTableRowProps> = ({
     }
   };
 
+  const currentIndex = plan.findIndex((l) => l.id === lesson.id);
+  const nextLesson = plan[currentIndex + 1];
+  const isSectionEnd =
+    (!nextLesson ||
+      nextLesson.sectionName !== lesson.sectionName ||
+      nextLesson.rowType === LessonRowType.QUARTER_HEADER) &&
+    lesson.rowType !== LessonRowType.QUARTER_HEADER &&
+    lesson.rowType !== LessonRowType.SOCH &&
+    lesson.rowType !== LessonRowType.REPETITION;
+
+  const handleAddSor = () => {
+    dispatch(addSor({ lessonId: lesson.id }));
+  };
+
   const renderCells = () => {
     if (lesson.rowType === LessonRowType.QUARTER_HEADER) {
       return (
-        <>
-          <StyledTableCell colSpan={9} sx={{ fontWeight: "bold" }}>
-            {lesson.sectionName}
-          </StyledTableCell>
-        </>
+        <StyledTableCell colSpan={9} sx={{ fontWeight: "bold" }}>
+          {lesson.sectionName}
+        </StyledTableCell>
       );
     }
-
     if (
       lesson.rowType === LessonRowType.REPETITION ||
       lesson.rowType === LessonRowType.SOCH
@@ -290,33 +298,15 @@ export const KtpTableRow: React.FC<KtpTableRowProps> = ({
         </>
       );
     }
-
     if (lesson.rowType === LessonRowType.SOR) {
       return (
         <>
           <StyledTableCell>{lesson.lessonNumber}</StyledTableCell>
-          <StyledTableCell>{1}</StyledTableCell>
+          <StyledTableCell>{lesson.hoursInSection}</StyledTableCell>
           <StyledTableCell
-            colSpan={2}
             onDoubleClick={() => setIsEditingSectionName(true)}
-          >
-            {isEditingSectionName ? (
-              <StyledInput
-                type="text"
-                value={localSectionName}
-                onChange={(e) => setLocalSectionName(e.target.value)}
-                onBlur={() => handleInputBlur("sectionName")}
-                onKeyDown={(e) => handleKeyDown(e, "sectionName")}
-                autoFocus
-              />
-            ) : (
-              localSectionName
-            )}
-          </StyledTableCell>
-          <StyledTableCell
-            colSpan={2}
-            onDoubleClick={() => setIsEditingLessonTopic(true)}
-          >
+          ></StyledTableCell>
+          <StyledTableCell onDoubleClick={() => setIsEditingLessonTopic(true)}>
             {isEditingLessonTopic ? (
               <StyledInput
                 type="text"
@@ -330,6 +320,26 @@ export const KtpTableRow: React.FC<KtpTableRowProps> = ({
               localLessonTopic
             )}
           </StyledTableCell>
+          <StyledTableCell onDoubleClick={() => setIsEditingObjective(true)}>
+            {isEditingObjective ? (
+              <StyledInput
+                type="text"
+                value={localObjectiveDescription}
+                onChange={(e) => setLocalObjectiveDescription(e.target.value)}
+                onBlur={() => handleInputBlur("objectiveDescription")}
+                onKeyDown={(e) => handleKeyDown(e, "objectiveDescription")}
+                autoFocus
+              />
+            ) : (
+              <>
+                <span style={{ fontWeight: "bold" }}>
+                  {lesson.objectiveId}{" "}
+                </span>
+                {localObjectiveDescription}
+              </>
+            )}
+          </StyledTableCell>
+          <StyledTableCell>{lesson.hours}</StyledTableCell>
           <StyledTableCell onDoubleClick={() => setIsEditingDate(true)}>
             {isEditingDate ? (
               <StyledInput
@@ -344,20 +354,7 @@ export const KtpTableRow: React.FC<KtpTableRowProps> = ({
               localDate
             )}
           </StyledTableCell>
-          <StyledTableCell onDoubleClick={() => setIsEditingNotes(true)}>
-            {isEditingNotes ? (
-              <StyledInput
-                type="text"
-                value={localNotes}
-                onChange={(e) => setLocalNotes(e.target.value)}
-                onBlur={() => handleInputBlur("notes")}
-                onKeyDown={(e) => handleKeyDown(e, "notes")}
-                autoFocus
-              />
-            ) : (
-              localNotes
-            )}
-          </StyledTableCell>
+          <StyledTableCell></StyledTableCell>
           <StyledTableCell>
             <Tooltip title="Добавить час">
               <IconButton size="small" onClick={handleAddHour}>
@@ -375,7 +372,6 @@ export const KtpTableRow: React.FC<KtpTableRowProps> = ({
         </>
       );
     }
-
     return (
       <>
         <StyledTableCell>{lesson.lessonNumber}</StyledTableCell>
@@ -475,7 +471,6 @@ export const KtpTableRow: React.FC<KtpTableRowProps> = ({
       </>
     );
   };
-
   const rowBackgroundColor =
     lesson.rowType === LessonRowType.STANDARD
       ? isOddSection
@@ -498,6 +493,34 @@ export const KtpTableRow: React.FC<KtpTableRowProps> = ({
         >
           {renderCells()}
         </SortableTableRow>
+      )}
+
+      {isSectionEnd && (
+        <TableRow>
+          <TableCell colSpan={10} sx={{ p: 0 }}>
+            <Box
+              sx={{
+                width: "200px",
+                height: "30px",
+                backgroundColor: "#2196f3",
+                color: "white",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: "0 0 15px 15px",
+                margin: "0 auto",
+                cursor: "pointer",
+                zIndex: 1,
+                "&:hover": {
+                  backgroundColor: "#1565c0",
+                },
+              }}
+              onClick={handleAddSor}
+            >
+              Добавить СОР
+            </Box>
+          </TableCell>
+        </TableRow>
       )}
     </>
   );
