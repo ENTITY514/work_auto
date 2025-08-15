@@ -4,6 +4,7 @@ import Header from "./components/Header/header";
 import KtpEditorPage from "./pages/ktpEditorPage/page";
 import KtpPage from "./pages/ktpPage/page";
 import TupViewPage from "./pages/tupViewPage";
+import SettingsPage from "./pages/settingsPage/page"; // <-- ИМПОРТ
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
           <Route path="/ktp" element={<KtpPage />} />
           <Route path="/tup/:tupId" element={<TupViewPage />} />
           <Route path="/ktp-editor/:tupId" element={<KtpEditorPage />} />
+          <Route path="/settings" element={<SettingsPage />} />{" "}
         </Routes>
       </Box>
     </>

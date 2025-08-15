@@ -7,14 +7,13 @@ import {
   Box,
   IconButton,
 } from "@mui/material";
-import SchoolIcon from "@mui/icons-material/School"; // Пример иконки
-import { Link as RouterLink } from "react-router-dom"; // Используем Link из роутера
+import SchoolIcon from "@mui/icons-material/School";
+import { Link as RouterLink } from "react-router-dom";
 
 const Header: React.FC = () => {
   return (
     <AppBar position="static">
       <Toolbar>
-        {/* Иконка-заглушка */}
         <IconButton
           edge="start"
           color="inherit"
@@ -26,21 +25,22 @@ const Header: React.FC = () => {
           <SchoolIcon />
         </IconButton>
 
-        {/* Название приложения (можно убрать или изменить) */}
         <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
           Редактор КТП
         </Typography>
 
-        {/* Навигационные ссылки */}
         <Box>
           <Button color="inherit" component={RouterLink} to="/ktp">
             КТП
           </Button>
-
           <Button color="inherit" component={RouterLink} to="/grade-analyzer">
             Анализ журнала
           </Button>
-          {/* Здесь можно будет добавить другие ссылки, например, "Настройки" */}
+          <Button color="inherit" component={RouterLink} to="/settings">
+            {" "}
+            {/* <-- ДОБАВИТЬ КНОПКУ */}
+            Настройки
+          </Button>
         </Box>
       </Toolbar>
     </AppBar>
