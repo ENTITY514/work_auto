@@ -11,6 +11,7 @@ interface KtpEditorState {
   sourceTupName: string;
   status: "idle" | "loading" | "succeeded" | "failed";
   error: string | null;
+  autofillError: string | null;
 }
 
 const initialState: KtpEditorState = {
@@ -18,6 +19,7 @@ const initialState: KtpEditorState = {
   sourceTupName: "",
   status: "idle",
   error: null,
+  autofillError: null,
 };
 
 export const initKtpPlan = createAsyncThunk<
@@ -156,6 +158,8 @@ const ktpEditorSlice = createSlice({
       const { startQuarter, selectedDays, calendarProfile, holidays } =
         action.payload;
 
+      state.autofillError = null;
+
       const allHolidays = new Set([
         ...holidays.map((h) => h.date),
         ...calendarProfile.additionalHolidays.flatMap((h) => {
@@ -174,21 +178,6 @@ const ktpEditorSlice = createSlice({
         return allHolidays.has(dateString);
       };
 
-      const quarterName = `${startQuarter.charAt(1)} четверть`;
-
-      let startPlanIndex = -1;
-      for (let i = 0; i < state.plan.length; i++) {
-        if (state.plan[i].sectionName.includes(quarterName)) {
-          startPlanIndex = i;
-          break;
-        }
-      }
-
-      if (startPlanIndex === -1) {
-        console.error("Не удалось найти начальную четверть в плане.");
-        return;
-      }
-
       const dayMap: { [key: number]: DayOfWeek } = {
         0: "воскресенье",
         1: "понедельник",
@@ -199,33 +188,92 @@ const ktpEditorSlice = createSlice({
         6: "суббота",
       };
 
+      const allQuarters = Object.values(calendarProfile.quarters);
+      const startQuarterIndex = Object.keys(calendarProfile.quarters).findIndex(
+        (q) => q === startQuarter
+      );
+
+      const relevantQuarters = allQuarters.slice(startQuarterIndex);
+
+      let totalLessonsToFill = 0;
+      let isFilling = false;
+      state.plan.forEach((lesson) => {
+        if (
+          lesson.sectionName.includes("четверть") &&
+          lesson.sectionName.includes(startQuarter.charAt(1))
+        ) {
+          isFilling = true;
+        }
+        if (isFilling && lesson.rowType !== LessonRowType.QUARTER_HEADER) {
+          totalLessonsToFill++;
+        }
+      });
+
+      let totalAvailableDays = 0;
+      relevantQuarters.forEach((quarter) => {
+        const start = new Date(quarter.start);
+        const end = new Date(quarter.end);
+
+        const tempDate = new Date(start);
+        while (tempDate <= end) {
+          const dayOfWeek = dayMap[tempDate.getDay()];
+          const isSelectedDay = selectedDays.includes(dayOfWeek);
+
+          if (isSelectedDay && !isHoliday(tempDate)) {
+            totalAvailableDays++;
+          }
+          tempDate.setDate(tempDate.getDate() + 1);
+        }
+      });
+
+      if (totalLessonsToFill > totalAvailableDays) {
+        console.log(totalLessonsToFill, totalAvailableDays);
+        state.autofillError = `Недостаточно учебных дней для автозаполнения. Не хватает ${
+          totalLessonsToFill - totalAvailableDays
+        } дней.`;
+        return;
+      }
+
+      if (totalLessonsToFill < totalAvailableDays) {
+        console.log(totalLessonsToFill, totalAvailableDays);
+        state.autofillError = `Слишком много учебных дней для автозаполнения. Лишних ${
+          totalAvailableDays - totalLessonsToFill
+        } дней.`;
+        return;
+      }
+
       let currentDate = new Date(calendarProfile.quarters[startQuarter].start);
-      let dayIndex = 0;
+      let lessonCounter = 0;
 
-      for (let i = startPlanIndex; i < state.plan.length; i++) {
-        const lesson = state.plan[i];
-
+      for (const lesson of state.plan) {
         if (lesson.rowType === LessonRowType.QUARTER_HEADER) {
+          if (lesson.sectionName.includes(startQuarter.charAt(1))) {
+            isFilling = true;
+          } else {
+            isFilling = false;
+          }
           continue;
         }
 
-        while (true) {
-          const dayOfWeek = dayMap[currentDate.getDay()];
-          const isSelectedDay = selectedDays.includes(dayOfWeek);
+        if (isFilling) {
+          let foundDate = false;
+          while (!foundDate) {
+            const dayOfWeek = dayMap[currentDate.getDay()];
+            const isSelectedDay = selectedDays.includes(dayOfWeek);
+            const isDateHoliday = isHoliday(currentDate);
 
-          if (isSelectedDay && !isHoliday(currentDate)) {
-            lesson.date = currentDate.toISOString().split("T")[0];
-            dayIndex++;
-            if (dayIndex >= selectedDays.length) {
-              dayIndex = 0;
-              currentDate.setDate(currentDate.getDate() + 1);
+            if (isSelectedDay && !isDateHoliday) {
+              lesson.date = currentDate.toISOString().split("T")[0];
+              foundDate = true;
+              lessonCounter++;
             }
-            break;
-          } else {
             currentDate.setDate(currentDate.getDate() + 1);
           }
         }
       }
+    },
+    clearAutofillError(state) {
+      state.autofillError = null;
     },
   },
 
@@ -253,6 +301,7 @@ export const {
   reorderPlan,
   addSor,
   autofillDates,
+  clearAutofillError,
 } = ktpEditorSlice.actions;
 
 export const ktpEditorReducer = ktpEditorSlice.reducer;

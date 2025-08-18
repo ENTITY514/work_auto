@@ -1,6 +1,5 @@
 // src/pages/KtpEditorPage/page.tsx
-
-import React, { useEffect, useState } from "react"; // <-- NEW IMPORT useState
+import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import {
   Container,
@@ -9,45 +8,64 @@ import {
   Alert,
   Box,
   Button,
-  FormControl, // <-- NEW IMPORT
-  InputLabel, // <-- NEW IMPORT
-  Select, // <-- NEW IMPORT
-  MenuItem, // <-- NEW IMPORT
-  OutlinedInput, // <-- NEW IMPORT
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  OutlinedInput,
   Chip,
-  Paper, // <-- NEW IMPORT
+  Paper,
 } from "@mui/material";
 import { useAppSelector, useAppDispatch } from "../../shared/lib/hooks";
-import { initKtpPlan, autofillDates } from "../../entities/ktp/model/slice"; // <-- UPDATE: added autofillDates
+import {
+  initKtpPlan,
+  autofillDates,
+  clearAutofillError,
+} from "../../entities/ktp/model/slice";
 import { KtpEditor } from "../../features/KTPEditor";
-import { DayOfWeek } from "../../entities/ktp/model/types"; // <-- NEW IMPORT
+import { DayOfWeek } from "../../entities/ktp/model/types";
+import NotificationModal from "../../components/NotificationModal/NotificationModal";
 
 const KtpEditorPage: React.FC = () => {
   const { tupId } = useParams<{ tupId: string }>();
   const dispatch = useAppDispatch();
 
-  const { status, error, sourceTupName, plan } = useAppSelector(
+  const { status, error, sourceTupName, plan, autofillError } = useAppSelector(
     (state) => state.ktpEditor
   );
-  // 💡 НОВОЕ: Получаем данные календаря из Redux
   const calendarState = useAppSelector((state) => state.calendar);
   const activeProfile = calendarState.profiles.find(
     (p) => p.id === calendarState.activeProfileId
   );
   const quarters = activeProfile ? Object.keys(activeProfile.quarters) : [];
 
-  // 💡 НОВОЕ: Локальные состояния для настроек автозаполнения
   const [selectedProfile, setSelectedProfile] = useState(
     calendarState.activeProfileId || ""
   );
   const [startQuarter, setStartQuarter] = useState(quarters[0] || "");
   const [selectedDays, setSelectedDays] = useState<DayOfWeek[]>([]);
 
+  // 💡 НОВОЕ: Состояния для модального окна уведомлений
+  const [notificationOpen, setNotificationOpen] = useState(false);
+  const [notificationMessage, setNotificationMessage] = useState("");
+  const [notificationType, setNotificationType] = useState<
+    "info" | "success" | "error"
+  >("info");
+
   useEffect(() => {
     if (tupId) {
       dispatch(initKtpPlan(tupId));
     }
   }, [dispatch, tupId]);
+
+  // 💡 НОВОЕ: useEffect для отслеживания ошибок автозаполнения
+  useEffect(() => {
+    if (autofillError) {
+      setNotificationMessage(autofillError);
+      setNotificationType("error");
+      setNotificationOpen(true);
+    }
+  }, [autofillError]);
 
   const handleAutofill = () => {
     if (activeProfile && selectedDays.length > 0 && startQuarter) {
@@ -60,6 +78,12 @@ const KtpEditorPage: React.FC = () => {
         })
       );
     }
+  };
+
+  const handleNotificationClose = () => {
+    setNotificationOpen(false);
+    // 💡 НОВОЕ: Очищаем ошибку из Redux, когда пользователь закрыл уведомление
+    dispatch(clearAutofillError());
   };
 
   let content;
@@ -120,7 +144,6 @@ const KtpEditorPage: React.FC = () => {
               ))}
             </Select>
           </FormControl>
-          {/* Выбор дней недели */}
           <FormControl sx={{ minWidth: 250 }}>
             <InputLabel>Дни проведения уроков</InputLabel>
             <Select
@@ -170,11 +193,19 @@ const KtpEditorPage: React.FC = () => {
         <Button
           variant="contained"
           size="large"
-          onClick={() => console.log(plan)} // Логика сохранения остается без изменений
+          onClick={() => console.log(plan)}
         >
           Сохранить КТП
         </Button>
       </Box>
+
+      {/* 💡 НОВОЕ: Отображение модального окна уведомлений */}
+      <NotificationModal
+        open={notificationOpen}
+        onClose={handleNotificationClose}
+        message={notificationMessage}
+        type={notificationType}
+      />
     </Container>
   );
 };
