@@ -13,7 +13,7 @@ const createNewProfile = (name: string): CalendarProfile => ({
     q3: { start: "2025-01-09", end: "2025-03-20" },
     q4: { start: "2025-04-01", end: "2025-05-25" },
   },
-  additionalHolidays: [], // <--- ИНИЦИАЛИЗИРУЕМ ПУСТОЙ МАССИВ
+  additionalHolidays: [],
 });
 
 const getInitialState = (): CalendarState => {
@@ -59,7 +59,6 @@ const loadState = (): CalendarState => {
       return getInitialState();
     }
     const state = JSON.parse(serializedState);
-    // Миграция и проверка на наличие нового поля
     state.profiles = state.profiles.map((p: any) => ({
       ...p,
       additionalHolidays: p.additionalHolidays || [],

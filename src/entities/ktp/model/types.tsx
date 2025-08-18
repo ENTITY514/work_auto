@@ -23,3 +23,12 @@ export enum LessonRowType {
 }
 
 export type KtpPlan = IKtpLesson[];
+
+export type DayOfWeek =
+  | "понедельник"
+  | "вторник"
+  | "среда"
+  | "четверг"
+  | "пятница"
+  | "суббота"
+  | "воскресенье";
