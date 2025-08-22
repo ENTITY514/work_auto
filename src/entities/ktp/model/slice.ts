@@ -1,14 +1,28 @@
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 import { RootState } from "../../../store/store";
 import { transformTupToKtp, renumberPlan } from "./lib";
-import { KtpPlan, IKtpLesson, LessonRowType, DayOfWeek } from "./types";
+import { KtpPlan, IKtpLesson, LessonRowType, DayOfWeek, ILessonObjective } from "./types";
 import { arrayMove } from "@dnd-kit/sortable";
 import { v4 as uuidv4 } from "uuid";
 import { CalendarProfile, Holiday } from "../../calendar/model/types";
 
+const toYYYYMMDD = (date: Date) => {
+  const year = date.getFullYear();
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const day = date.getDate().toString().padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 interface KtpEditorState {
   plan: KtpPlan;
   sourceTupName: string;
+  totalHours: number;
+  quarterWorkHours: {
+    q1: number;
+    q2: number;
+    q3: number;
+    q4: number;
+  };
   status: "idle" | "loading" | "succeeded" | "failed";
   error: string | null;
   autofillError: string | null;
@@ -17,6 +31,8 @@ interface KtpEditorState {
 const initialState: KtpEditorState = {
   plan: [],
   sourceTupName: "",
+  totalHours: 0,
+  quarterWorkHours: { q1: 0, q2: 0, q3: 0, q4: 0 },
   status: "idle",
   error: null,
   autofillError: null,
@@ -48,7 +64,7 @@ const ktpEditorSlice = createSlice({
       action: PayloadAction<{
         id: string;
         field: keyof IKtpLesson;
-        value: string | number;
+        value: string | number | ILessonObjective[];
       }>
     ) {
       const { id, field, value } = action.payload;
@@ -77,23 +93,6 @@ const ktpEditorSlice = createSlice({
     },
 
     deleteLesson(state, action: PayloadAction<{ lessonId: string }>) {
-      const lessonToDelete = state.plan.find(
-        (l) => l.id === action.payload.lessonId
-      );
-      if (!lessonToDelete) {
-        return;
-      }
-      const lessonsWithSameObjective = state.plan.filter(
-        (l) => l.objectiveId === lessonToDelete.objectiveId
-      );
-
-      if (lessonsWithSameObjective.length <= 1) {
-        console.warn(
-          "Cannot delete the last remaining lesson for an objective."
-        );
-        return;
-      }
-
       state.plan = state.plan.filter((l) => l.id !== action.payload.lessonId);
       state.plan = renumberPlan(state.plan);
     },
@@ -108,6 +107,42 @@ const ktpEditorSlice = createSlice({
       if (oldIndex !== -1 && newIndex !== -1) {
         state.plan = renumberPlan(arrayMove(state.plan, oldIndex, newIndex));
       }
+    },
+
+    mergeObjectives(
+      state,
+      action: PayloadAction<{ sourceLessonId: string; targetLessonId: string }>
+    ) {
+      const { sourceLessonId, targetLessonId } = action.payload;
+      const sourceLesson = state.plan.find((l) => l.id === sourceLessonId);
+      const targetLesson = state.plan.find((l) => l.id === targetLessonId);
+
+      if (sourceLesson && targetLesson) {
+        targetLesson.objectives.push(...sourceLesson.objectives);
+        state.plan = state.plan.filter((l) => l.id !== sourceLessonId);
+        state.plan = renumberPlan(state.plan);
+      }
+    },
+
+    splitAllObjectives(state, action: PayloadAction<{ lessonId: string }>) {
+      const { lessonId } = action.payload;
+      const lessonIndex = state.plan.findIndex((l) => l.id === lessonId);
+      if (lessonIndex === -1) return;
+
+      const originalLesson = state.plan[lessonIndex];
+      if (originalLesson.objectives.length < 2) return;
+
+      const objectivesToSplit = originalLesson.objectives.slice(1);
+      originalLesson.objectives = [originalLesson.objectives[0]];
+
+      const newLessons = objectivesToSplit.map((objective) => ({
+        ...originalLesson,
+        id: uuidv4(),
+        objectives: [objective],
+      }));
+
+      state.plan.splice(lessonIndex + 1, 0, ...newLessons);
+      state.plan = renumberPlan(state.plan);
     },
 
     addSor(state, action: PayloadAction<{ lessonId: string }>) {
@@ -131,8 +166,7 @@ const ktpEditorSlice = createSlice({
         lessonTopic: `СОР №${totalSorCount + 1} по разделу "${
           sectionLastLesson.sectionName
         }"`,
-        objectiveId: sectionLastLesson.objectiveId,
-        objectiveDescription: sectionLastLesson.objectiveDescription,
+        objectives: sectionLastLesson.objectives,
         hours: 1,
         date: "",
         notes: "",
@@ -164,17 +198,19 @@ const ktpEditorSlice = createSlice({
         ...holidays.map((h) => h.date),
         ...calendarProfile.additionalHolidays.flatMap((h) => {
           const dates = [];
-          const start = new Date(h.start);
-          const end = new Date(h.end);
-          for (let d = start; d <= end; d.setDate(d.getDate() + 1)) {
-            dates.push(d.toISOString().split("T")[0]);
+          const start = new Date(h.start + 'T00:00:00');
+          const end = new Date(h.end + 'T00:00:00');
+          let currentDate = new Date(start);
+          while (currentDate <= end) {
+            dates.push(toYYYYMMDD(currentDate));
+            currentDate.setDate(currentDate.getDate() + 1);
           }
           return dates;
         }),
       ]);
 
       const isHoliday = (date: Date) => {
-        const dateString = date.toISOString().split("T")[0];
+        const dateString = toYYYYMMDD(date);
         return allHolidays.has(dateString);
       };
 
@@ -211,8 +247,8 @@ const ktpEditorSlice = createSlice({
 
       let totalAvailableDays = 0;
       relevantQuarters.forEach((quarter) => {
-        const start = new Date(quarter.start);
-        const end = new Date(quarter.end);
+        const start = new Date(quarter.start + 'T00:00:00');
+        const end = new Date(quarter.end + 'T00:00:00');
 
         const tempDate = new Date(start);
         while (tempDate <= end) {
@@ -242,7 +278,7 @@ const ktpEditorSlice = createSlice({
         return;
       }
 
-      let currentDate = new Date(calendarProfile.quarters[startQuarter].start);
+      let currentDate = new Date(calendarProfile.quarters[startQuarter].start + 'T00:00:00');
       let lessonCounter = 0;
 
       for (const lesson of state.plan) {
@@ -263,7 +299,7 @@ const ktpEditorSlice = createSlice({
             const isDateHoliday = isHoliday(currentDate);
 
             if (isSelectedDay && !isDateHoliday) {
-              lesson.date = currentDate.toISOString().split("T")[0];
+              lesson.date = toYYYYMMDD(currentDate);
               foundDate = true;
               lessonCounter++;
             }
@@ -274,6 +310,12 @@ const ktpEditorSlice = createSlice({
     },
     clearAutofillError(state) {
       state.autofillError = null;
+    },
+    setTotalHours(state, action: PayloadAction<number>) {
+      state.totalHours = action.payload;
+    },
+    setQuarterWorkHours(state, action: PayloadAction<{ quarter: keyof KtpEditorState['quarterWorkHours'], hours: number }>) {
+      state.quarterWorkHours[action.payload.quarter] = action.payload.hours;
     },
   },
 
@@ -299,9 +341,13 @@ export const {
   addHour,
   deleteLesson,
   reorderPlan,
+  mergeObjectives,
+  splitAllObjectives,
   addSor,
   autofillDates,
   clearAutofillError,
+  setTotalHours,
+  setQuarterWorkHours,
 } = ktpEditorSlice.actions;
 
 export const ktpEditorReducer = ktpEditorSlice.reducer;

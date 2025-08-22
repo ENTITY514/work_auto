@@ -1,5 +1,3 @@
-// src/features/CalendarSettings/index.tsx
-
 import React, { useState } from "react";
 import { useAppDispatch, useAppSelector } from "../../shared/lib/hooks";
 import {

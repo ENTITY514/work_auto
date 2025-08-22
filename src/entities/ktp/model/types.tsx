@@ -1,13 +1,17 @@
 // src/entities/ktp/model/types.ts
 
+export interface ILessonObjective {
+  id: string;
+  description: string;
+}
+
 export interface IKtpLesson {
   id: string;
   lessonNumber: number;
   hoursInSection: number;
   sectionName: string;
   lessonTopic: string;
-  objectiveId: string;
-  objectiveDescription: string;
+  objectives: ILessonObjective[];
   hours: number;
   date: string;
   notes: string;

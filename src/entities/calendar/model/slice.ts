@@ -139,7 +139,6 @@ const calendarSlice = createSlice({
       );
       saveState(state);
     },
-    // НОВЫЕ РЕДЬЮСЕРЫ
     addAdditionalHoliday(
       state,
       action: PayloadAction<{ start: string; end: string; name: string }>

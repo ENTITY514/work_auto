@@ -1,5 +1,4 @@
-// src/pages/KtpEditorPage/page.tsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import {
   Container,
@@ -15,24 +14,35 @@ import {
   OutlinedInput,
   Chip,
   Paper,
+  TextField,
+  Divider,
 } from "@mui/material";
 import { useAppSelector, useAppDispatch } from "../../shared/lib/hooks";
 import {
   initKtpPlan,
   autofillDates,
   clearAutofillError,
+  setTotalHours,
+  setQuarterWorkHours,
 } from "../../entities/ktp/model/slice";
 import { KtpEditor } from "../../features/KTPEditor";
 import { DayOfWeek } from "../../entities/ktp/model/types";
 import NotificationModal from "../../components/NotificationModal/NotificationModal";
+import { CalendarProfile } from "../../entities/calendar/model/types";
+
+const toYYYYMMDD = (date: Date) => {
+  const year = date.getFullYear();
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const day = date.getDate().toString().padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 const KtpEditorPage: React.FC = () => {
   const { tupId } = useParams<{ tupId: string }>();
   const dispatch = useAppDispatch();
 
-  const { status, error, sourceTupName, plan, autofillError } = useAppSelector(
-    (state) => state.ktpEditor
-  );
+  const { status, error, sourceTupName, plan, autofillError, totalHours, quarterWorkHours } =
+    useAppSelector((state) => state.ktpEditor);
   const calendarState = useAppSelector((state) => state.calendar);
   const activeProfile = calendarState.profiles.find(
     (p) => p.id === calendarState.activeProfileId
@@ -45,12 +55,92 @@ const KtpEditorPage: React.FC = () => {
   const [startQuarter, setStartQuarter] = useState(quarters[0] || "");
   const [selectedDays, setSelectedDays] = useState<DayOfWeek[]>([]);
 
-  // 💡 НОВОЕ: Состояния для модального окна уведомлений
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState("");
   const [notificationType, setNotificationType] = useState<
     "info" | "success" | "error"
   >("info");
+  const [localTotalHours, setLocalTotalHours] = useState(totalHours.toString());
+
+  useEffect(() => {
+    setLocalTotalHours(totalHours.toString());
+  }, [totalHours]);
+
+  const handleHoursChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    if (/^\d*$/.test(value)) {
+      setLocalTotalHours(value);
+    }
+  };
+
+  const handleHoursBlur = () => {
+    const finalHours =
+      localTotalHours === "" ? 0 : parseInt(localTotalHours, 10);
+    dispatch(setTotalHours(finalHours));
+  };
+
+  const handleQuarterHoursChange = (
+    quarter: keyof typeof quarterWorkHours,
+    value: string
+  ) => {
+    if (/^\d*$/.test(value)) {
+      const hours = value === "" ? 0 : parseInt(value, 10);
+      dispatch(setQuarterWorkHours({ quarter, hours }));
+    }
+  };
+
+  const possibleLessons = useMemo(() => {
+    if (!activeProfile || selectedDays.length === 0) return {};
+
+    const dayMap: { [key: number]: DayOfWeek } = {
+      0: "воскресенье",
+      1: "понедельник",
+      2: "вторник",
+      3: "среда",
+      4: "четверг",
+      5: "пятница",
+      6: "суббота",
+    };
+
+    const allHolidays = new Set([
+      ...calendarState.holidays.map((h) => h.date),
+      ...activeProfile.additionalHolidays.flatMap((h) => {
+        const dates = [];
+        const start = new Date(h.start + 'T00:00:00');
+        const end = new Date(h.end + 'T00:00:00');
+        let currentDate = new Date(start);
+        while (currentDate <= end) {
+          dates.push(toYYYYMMDD(currentDate));
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+        return dates;
+      }),
+    ]);
+
+    const isHoliday = (date: Date) => {
+      const dateString = toYYYYMMDD(date);
+      return allHolidays.has(dateString);
+    };
+
+    const result: { [key: string]: number } = {};
+
+    for (const [qKey, qDates] of Object.entries(activeProfile.quarters)) {
+      let count = 0;
+      const start = new Date(qDates.start + 'T00:00:00');
+      const end = new Date(qDates.end + 'T00:00:00');
+      const tempDate = new Date(start);
+
+      while (tempDate <= end) {
+        const dayOfWeek = dayMap[tempDate.getDay()];
+        if (selectedDays.includes(dayOfWeek) && !isHoliday(tempDate)) {
+          count++;
+        }
+        tempDate.setDate(tempDate.getDate() + 1);
+      }
+      result[qKey] = count;
+    }
+    return result;
+  }, [activeProfile, selectedDays, calendarState.holidays]);
 
   useEffect(() => {
     if (tupId) {
@@ -58,7 +148,6 @@ const KtpEditorPage: React.FC = () => {
     }
   }, [dispatch, tupId]);
 
-  // 💡 НОВОЕ: useEffect для отслеживания ошибок автозаполнения
   useEffect(() => {
     if (autofillError) {
       setNotificationMessage(autofillError);
@@ -82,8 +171,87 @@ const KtpEditorPage: React.FC = () => {
 
   const handleNotificationClose = () => {
     setNotificationOpen(false);
-    // 💡 НОВОЕ: Очищаем ошибку из Redux, когда пользователь закрыл уведомление
     dispatch(clearAutofillError());
+  };
+
+  const renderQuarterInputs = () => {
+    const quarterHoursSum = Object.values(quarterWorkHours).reduce(
+      (sum, h) => sum + (h || 0),
+      0
+    );
+
+    return (
+      <Box sx={{ mt: 2 }}>
+        <Typography variant="h6" gutterBottom>
+          Распределение часов по четвертям
+        </Typography>
+        <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+          {Object.entries(quarterWorkHours).map(([key, hours]) => (
+            <TextField
+              key={key}
+              label={`Четверть ${key.substring(1)}`}
+              type="text"
+              value={hours || ""}
+              onChange={(e) =>
+                handleQuarterHoursChange(
+                  key as keyof typeof quarterWorkHours,
+                  e.target.value
+                )
+              }
+              inputProps={{ inputMode: "numeric" }}
+              sx={{ minWidth: 120 }}
+            />
+          ))}
+        </Box>
+        {quarterHoursSum > totalHours && (
+          <Alert severity="warning" sx={{ mt: 2 }}>
+            Сумма часов по четвертям ({quarterHoursSum}) превышает общее
+            количество часов в году ({totalHours}).
+          </Alert>
+        )}
+      </Box>
+    );
+  };
+
+  const renderPossibleLessonsInfo = () => {
+    if (!activeProfile || selectedDays.length === 0) return null;
+
+    const differences = Object.keys(possibleLessons).filter(
+      (qKey) =>
+        possibleLessons[qKey] !==
+        (quarterWorkHours[qKey as keyof typeof quarterWorkHours] || 0)
+    );
+
+    if (differences.length === 0) {
+      return (
+        <Alert severity="success" sx={{ mt: 2 }}>
+          Указанное количество часов совпадает с возможным количеством уроков.
+        </Alert>
+      );
+    }
+
+    return (
+      <Box sx={{ mt: 2 }}>
+        <Typography variant="h6" gutterBottom>
+          Анализ часов
+        </Typography>
+        {differences.map((qKey) => {
+          const possible = possibleLessons[qKey];
+          const specified =
+            quarterWorkHours[qKey as keyof typeof quarterWorkHours] || 0;
+          const diff = possible - specified;
+
+          return (
+            <Alert key={qKey} severity={diff > 0 ? "info" : "warning"} sx={{ mt: 1 }}>
+              В {qKey.replace("q", "")} четверти:{" "}
+              {diff > 0
+                ? `возможно провести на ${diff} урок(ов) больше (возможно: ${possible}, указано: ${specified})`
+                : `указанное количество часов превышает возможное на ${-diff} (возможно: ${possible}, указано: ${specified})`}
+            </Alert>
+          );
+        })}
+      </Box>
+    );
   };
 
   let content;
@@ -103,7 +271,30 @@ const KtpEditorPage: React.FC = () => {
       </Typography>
 
       <Paper elevation={2} sx={{ p: 2, mb: 3 }}>
-        <Typography variant="h6" gutterBottom>
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            mb: 2,
+          }}
+        >
+          <Typography variant="h6" gutterBottom>
+            Настройки КТП
+          </Typography>
+          <TextField
+            label="Общее количество часов в году"
+            type="text"
+            value={localTotalHours}
+            onChange={handleHoursChange}
+            onBlur={handleHoursBlur}
+            inputProps={{ inputMode: "numeric" }}
+            sx={{ minWidth: 200 }}
+          />
+        </Box>
+        {renderQuarterInputs()}
+        <Divider sx={{ my: 2 }} />
+        <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
           Настройки автоматического заполнения
         </Typography>
         <Box
@@ -185,6 +376,7 @@ const KtpEditorPage: React.FC = () => {
             Автозаполнение дат
           </Button>
         </Box>
+        {renderPossibleLessonsInfo()}
       </Paper>
 
       {content}
@@ -199,7 +391,6 @@ const KtpEditorPage: React.FC = () => {
         </Button>
       </Box>
 
-      {/* 💡 НОВОЕ: Отображение модального окна уведомлений */}
       <NotificationModal
         open={notificationOpen}
         onClose={handleNotificationClose}
