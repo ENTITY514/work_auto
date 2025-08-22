@@ -13,9 +13,11 @@ const toYYYYMMDD = (date: Date) => {
   return `${year}-${month}-${day}`;
 }
 
-interface KtpEditorState {
+export interface SavedKtp {
+  id: string;
+  name: string;
+  className: string;
   plan: KtpPlan;
-  sourceTupName: string;
   totalHours: number;
   quarterWorkHours: {
     q1: number;
@@ -23,6 +25,20 @@ interface KtpEditorState {
     q3: number;
     q4: number;
   };
+}
+
+interface KtpEditorState {
+  plan: KtpPlan;
+  sourceTupName: string;
+  className: string;
+  totalHours: number;
+  quarterWorkHours: {
+    q1: number;
+    q2: number;
+    q3: number;
+    q4: number;
+  };
+  savedKtps: SavedKtp[];
   status: "idle" | "loading" | "succeeded" | "failed";
   error: string | null;
   autofillError: string | null;
@@ -31,18 +47,20 @@ interface KtpEditorState {
 const initialState: KtpEditorState = {
   plan: [],
   sourceTupName: "",
+  className: "",
   totalHours: 0,
   quarterWorkHours: { q1: 0, q2: 0, q3: 0, q4: 0 },
+  savedKtps: [],
   status: "idle",
   error: null,
   autofillError: null,
 };
 
-export const initKtpPlan = createAsyncThunk<
-  { plan: KtpPlan; name: string },
+export const createKtpFromTup = createAsyncThunk<
+  SavedKtp,
   string,
   { state: RootState }
->("ktpEditor/init", (tupId, { getState, rejectWithValue }) => {
+>("ktpEditor/createFromTup", (tupId, { getState, rejectWithValue }) => {
   const state = getState();
   const allTups = state.academicPlan.tupList;
   const tupIndex = parseInt(tupId, 10);
@@ -52,13 +70,33 @@ export const initKtpPlan = createAsyncThunk<
     return rejectWithValue("Исходный ТУП не найден.");
   }
   const transformedPlan = transformTupToKtp(sourceTup.planData);
-  return { plan: transformedPlan, name: sourceTup.name };
+  const newKtp: SavedKtp = {
+    id: uuidv4(),
+    name: sourceTup.name,
+    className: "", // Default class name
+    plan: transformedPlan,
+    totalHours: 0,
+    quarterWorkHours: { q1: 0, q2: 0, q3: 0, q4: 0 },
+  };
+
+  try {
+    const ktps = JSON.parse(localStorage.getItem('ktps') || '[]') as SavedKtp[];
+    ktps.push(newKtp);
+    localStorage.setItem('ktps', JSON.stringify(ktps));
+    return newKtp;
+  } catch (error) {
+    console.error("Failed to save KTP to localStorage", error);
+    return rejectWithValue("Ошибка сохранения КТП");
+  }
 });
 
 const ktpEditorSlice = createSlice({
   name: "ktpEditor",
   initialState,
   reducers: {
+    setClassName(state, action: PayloadAction<string>) {
+      state.className = action.payload;
+    },
     updateLesson(
       state,
       action: PayloadAction<{
@@ -317,19 +355,91 @@ const ktpEditorSlice = createSlice({
     setQuarterWorkHours(state, action: PayloadAction<{ quarter: keyof KtpEditorState['quarterWorkHours'], hours: number }>) {
       state.quarterWorkHours[action.payload.quarter] = action.payload.hours;
     },
+    saveKtpToLocalStorage(state, action: PayloadAction<{ name: string; id?: string; className: string; }>) {
+      try {
+        const { name, id, className } = action.payload;
+        const ktps = JSON.parse(localStorage.getItem('ktps') || '[]') as SavedKtp[];
+        const ktpData: SavedKtp = {
+          id: id || uuidv4(),
+          name,
+          className,
+          plan: state.plan,
+          totalHours: state.totalHours,
+          quarterWorkHours: state.quarterWorkHours,
+        };
+
+        const existingIndex = ktps.findIndex(k => k.id === ktpData.id);
+        if (existingIndex !== -1) {
+          ktps[existingIndex] = ktpData;
+        } else {
+          ktps.push(ktpData);
+        }
+
+        localStorage.setItem('ktps', JSON.stringify(ktps));
+        state.savedKtps = ktps;
+      } catch (error) {
+        console.error("Failed to save KTP to localStorage", error);
+      }
+    },
+    loadKtpsFromLocalStorage(state) {
+      try {
+        const ktps = JSON.parse(localStorage.getItem('ktps') || '[]') as SavedKtp[];
+        state.savedKtps = ktps;
+      } catch (error) {
+        console.error("Failed to load KTPs from localStorage", error);
+      }
+    },
+    setKtpForEditing(state, action: PayloadAction<string>) {
+      const ktpId = action.payload;
+      const ktp = state.savedKtps.find(k => k.id === ktpId);
+      if (ktp) {
+        state.plan = ktp.plan;
+        state.totalHours = ktp.totalHours;
+        state.quarterWorkHours = ktp.quarterWorkHours;
+        state.sourceTupName = ktp.name;
+        state.className = ktp.className;
+      }
+    },
+    updateKtpName(state, action: PayloadAction<{ id: string; name: string }>) {
+      try {
+        const { id, name } = action.payload;
+        const ktps = JSON.parse(localStorage.getItem('ktps') || '[]') as SavedKtp[];
+        const ktpIndex = ktps.findIndex(k => k.id === id);
+        if (ktpIndex !== -1) {
+          ktps[ktpIndex].name = name;
+          localStorage.setItem('ktps', JSON.stringify(ktps));
+          state.savedKtps = ktps;
+        }
+      } catch (error) {
+        console.error("Failed to update KTP name in localStorage", error);
+      }
+    },
+    deleteKtp(state, action: PayloadAction<string>) {
+      try {
+        const ktpId = action.payload;
+        let ktps = JSON.parse(localStorage.getItem('ktps') || '[]') as SavedKtp[];
+        ktps = ktps.filter(k => k.id !== ktpId);
+        localStorage.setItem('ktps', JSON.stringify(ktps));
+        state.savedKtps = ktps;
+      } catch (error) {
+        console.error("Failed to delete KTP from localStorage", error);
+      }
+    },
   },
 
   extraReducers: (builder) => {
     builder
-      .addCase(initKtpPlan.pending, (state) => {
+      .addCase(createKtpFromTup.pending, (state) => {
         state.status = "loading";
       })
-      .addCase(initKtpPlan.fulfilled, (state, action) => {
+      .addCase(createKtpFromTup.fulfilled, (state, action) => {
         state.status = "succeeded";
         state.plan = action.payload.plan;
         state.sourceTupName = action.payload.name;
+        state.className = action.payload.className;
+        state.savedKtps.push(action.payload);
       })
-      .addCase(initKtpPlan.rejected, (state, action) => {
+      .addCase(createKtpFromTup.rejected, (state, action) => {
         state.status = "failed";
         state.error = action.payload as string;
       });
@@ -337,6 +447,7 @@ const ktpEditorSlice = createSlice({
 });
 
 export const {
+  setClassName,
   updateLesson,
   addHour,
   deleteLesson,
@@ -348,6 +459,11 @@ export const {
   clearAutofillError,
   setTotalHours,
   setQuarterWorkHours,
+  saveKtpToLocalStorage,
+  loadKtpsFromLocalStorage,
+  setKtpForEditing,
+  updateKtpName,
+  deleteKtp,
 } = ktpEditorSlice.actions;
 
 export const ktpEditorReducer = ktpEditorSlice.reducer;

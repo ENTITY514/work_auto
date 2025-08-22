@@ -19,16 +19,19 @@ import {
 } from "@mui/material";
 import { useAppSelector, useAppDispatch } from "../../shared/lib/hooks";
 import {
-  initKtpPlan,
   autofillDates,
   clearAutofillError,
   setTotalHours,
   setQuarterWorkHours,
+  saveKtpToLocalStorage,
+  setKtpForEditing,
+  setClassName,
 } from "../../entities/ktp/model/slice";
 import { KtpEditor } from "../../features/KTPEditor";
 import { DayOfWeek } from "../../entities/ktp/model/types";
 import NotificationModal from "../../components/NotificationModal/NotificationModal";
 import { CalendarProfile } from "../../entities/calendar/model/types";
+import { generateWordDocument } from "../../shared/lib/word-generator";
 
 const toYYYYMMDD = (date: Date) => {
   const year = date.getFullYear();
@@ -38,10 +41,10 @@ const toYYYYMMDD = (date: Date) => {
 }
 
 const KtpEditorPage: React.FC = () => {
-  const { tupId } = useParams<{ tupId: string }>();
+  const { ktpId } = useParams<{ ktpId: string }>();
   const dispatch = useAppDispatch();
 
-  const { status, error, sourceTupName, plan, autofillError, totalHours, quarterWorkHours } =
+  const { status, error, sourceTupName, plan, autofillError, totalHours, quarterWorkHours, className } =
     useAppSelector((state) => state.ktpEditor);
   const calendarState = useAppSelector((state) => state.calendar);
   const activeProfile = calendarState.profiles.find(
@@ -61,6 +64,12 @@ const KtpEditorPage: React.FC = () => {
     "info" | "success" | "error"
   >("info");
   const [localTotalHours, setLocalTotalHours] = useState(totalHours.toString());
+
+  useEffect(() => {
+    if (ktpId) {
+      dispatch(setKtpForEditing(ktpId));
+    }
+  }, [dispatch, ktpId]);
 
   useEffect(() => {
     setLocalTotalHours(totalHours.toString());
@@ -143,12 +152,6 @@ const KtpEditorPage: React.FC = () => {
   }, [activeProfile, selectedDays, calendarState.holidays]);
 
   useEffect(() => {
-    if (tupId) {
-      dispatch(initKtpPlan(tupId));
-    }
-  }, [dispatch, tupId]);
-
-  useEffect(() => {
     if (autofillError) {
       setNotificationMessage(autofillError);
       setNotificationType("error");
@@ -172,6 +175,30 @@ const KtpEditorPage: React.FC = () => {
   const handleNotificationClose = () => {
     setNotificationOpen(false);
     dispatch(clearAutofillError());
+  };
+
+  const handleSave = () => {
+    try {
+      dispatch(saveKtpToLocalStorage({ name: sourceTupName, id: ktpId, className }));
+      setNotificationMessage("КТП успешно сохранено!");
+      setNotificationType("success");
+      setNotificationOpen(true);
+    } catch (error) {
+      setNotificationMessage("Ошибка при сохранении КТП.");
+      setNotificationType("error");
+      setNotificationOpen(true);
+    }
+  };
+
+  const handleDownloadWord = () => {
+    generateWordDocument({
+      subjectName: sourceTupName,
+      className,
+      hoursPerWeek: selectedDays.length,
+      totalHours,
+      plan,
+      quarterWorkHours,
+    });
   };
 
   const renderQuarterInputs = () => {
@@ -267,7 +294,7 @@ const KtpEditorPage: React.FC = () => {
   return (
     <Container maxWidth="xl">
       <Typography variant="h4" component="h1" gutterBottom>
-        Редактор КТП на основе: "{sourceTupName || "..."}"
+        Редактор КТП: "{sourceTupName || "..."}"
       </Typography>
 
       <Paper elevation={2} sx={{ p: 2, mb: 3 }}>
@@ -282,6 +309,13 @@ const KtpEditorPage: React.FC = () => {
           <Typography variant="h6" gutterBottom>
             Настройки КТП
           </Typography>
+          <TextField
+            label="Класс"
+            type="text"
+            value={className}
+            onChange={(e) => dispatch(setClassName(e.target.value))}
+            sx={{ minWidth: 200, mr: 2 }}
+          />
           <TextField
             label="Общее количество часов в году"
             type="text"
@@ -381,13 +415,20 @@ const KtpEditorPage: React.FC = () => {
 
       {content}
 
-      <Box sx={{ mt: 4, display: "flex", justifyContent: "flex-end" }}>
+      <Box sx={{ mt: 4, display: "flex", justifyContent: "flex-end", gap: 2 }}>
         <Button
           variant="contained"
           size="large"
-          onClick={() => console.log(plan)}
+          onClick={handleSave}
         >
           Сохранить КТП
+        </Button>
+        <Button
+          variant="outlined"
+          size="large"
+          onClick={handleDownloadWord}
+        >
+          Скачать Word файл
         </Button>
       </Box>
 

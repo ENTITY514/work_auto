@@ -37,8 +37,6 @@ const Header: React.FC = () => {
             Анализ журнала
           </Button>
           <Button color="inherit" component={RouterLink} to="/settings">
-            {" "}
-            {/* <-- ДОБАВИТЬ КНОПКУ */}
             Настройки
           </Button>
         </Box>

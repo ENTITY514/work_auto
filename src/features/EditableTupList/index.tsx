@@ -1,7 +1,7 @@
 // src/features/EditableTupList/index.tsx
 
 import React, { useState } from "react";
-import { Link as RouterLink } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
   List,
   ListItem,
@@ -15,21 +15,26 @@ import {
 import BackupTableIcon from "@mui/icons-material/BackupTable";
 import EditIcon from "@mui/icons-material/Edit";
 import { renameTup } from "../../entities/circulumPlan/model/slice";
+import { createKtpFromTup } from "../../entities/ktp/model/slice";
 import { useAppDispatch, useAppSelector } from "../../shared/lib/hooks";
 
 export const EditableTupList: React.FC = () => {
   const dispatch = useAppDispatch();
-  const tupList = useAppSelector((state) => state.academicPlan.tupList); // Путь зависит от твоего store
+  const navigate = useNavigate();
+  const tupList = useAppSelector((state) => state.academicPlan.tupList);
   const [editingTupId, setEditingTupId] = useState<string | null>(null);
-
-  const handleNameChange = (id: string, newName: string) => {
-    // Временное изменение в локальном состоянии для отзывчивости UI
-    // Но реальное изменение будет по onBlur/Enter через Redux
-  };
 
   const handleFinishEditing = (id: string, newName: string) => {
     dispatch(renameTup({ id, newName }));
     setEditingTupId(null);
+  };
+
+  const handleCreateKtp = async (tupId: string) => {
+    const resultAction = await dispatch(createKtpFromTup(tupId));
+    if (createKtpFromTup.fulfilled.match(resultAction)) {
+      const newKtp = resultAction.payload;
+      navigate(`/ktp-editor/${newKtp.id}`);
+    }
   };
 
   if (tupList.length === 0) {
@@ -70,7 +75,7 @@ export const EditableTupList: React.FC = () => {
               sx={{ ml: 2, flexGrow: 1 }}
             />
           ) : (
-            <ListItemButton component={RouterLink} to={`/tup/${index}`}>
+            <ListItemButton onClick={() => handleCreateKtp(index.toString())}>
               <ListItemIcon>
                 <BackupTableIcon />
               </ListItemIcon>
