@@ -32,6 +32,7 @@ import { DayOfWeek } from "../../entities/ktp/model/types";
 import NotificationModal from "../../components/NotificationModal/NotificationModal";
 import { CalendarProfile } from "../../entities/calendar/model/types";
 import { generateWordDocument } from "../../shared/lib/word-generator";
+import { generateXlsx } from "../../shared/lib/xlsx-generator";
 
 const toYYYYMMDD = (date: Date) => {
   const year = date.getFullYear();
@@ -199,6 +200,10 @@ const KtpEditorPage: React.FC = () => {
       plan,
       quarterWorkHours,
     });
+  };
+
+  const handleDownloadXlsx = () => {
+    generateXlsx(plan, `${sourceTupName}_${className}`);
   };
 
   const renderQuarterInputs = () => {
@@ -429,6 +434,13 @@ const KtpEditorPage: React.FC = () => {
           onClick={handleDownloadWord}
         >
           Скачать Word файл
+        </Button>
+        <Button
+          variant="outlined"
+          size="large"
+          onClick={handleDownloadXlsx}
+        >
+          Скачать XLSX файл
         </Button>
       </Box>
 

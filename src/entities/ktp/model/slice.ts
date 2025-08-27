@@ -103,7 +103,7 @@ const ktpEditorSlice = createSlice({
         id: string;
         field: keyof IKtpLesson;
         value: string | number | ILessonObjective[];
-      }>
+      }> 
     ) {
       const { id, field, value } = action.payload;
       const lesson = state.plan.find((l) => l.id === id);
@@ -201,9 +201,9 @@ const ktpEditorSlice = createSlice({
       const newSor: IKtpLesson = {
         ...sectionLastLesson,
         id: uuidv4(),
-        lessonTopic: `СОР №${totalSorCount + 1} по разделу "${
+        lessonTopic: `${sectionLastLesson.lessonTopic}\nСОР №${totalSorCount + 1} по разделу "${ 
           sectionLastLesson.sectionName
-        }"`,
+        }"`, 
         objectives: sectionLastLesson.objectives,
         hours: 1,
         date: "",
@@ -225,7 +225,7 @@ const ktpEditorSlice = createSlice({
         selectedDays: DayOfWeek[];
         calendarProfile: CalendarProfile;
         holidays: Holiday[];
-      }>
+      }> 
     ) {
       const { startQuarter, selectedDays, calendarProfile, holidays } =
         action.payload;
@@ -302,7 +302,7 @@ const ktpEditorSlice = createSlice({
 
       if (totalLessonsToFill > totalAvailableDays) {
         console.log(totalLessonsToFill, totalAvailableDays);
-        state.autofillError = `Недостаточно учебных дней для автозаполнения. Не хватает ${
+        state.autofillError = `Недостаточно учебных дней для автозаполнения. Не хватает ${ 
           totalLessonsToFill - totalAvailableDays
         } дней.`;
         return;
@@ -310,7 +310,7 @@ const ktpEditorSlice = createSlice({
 
       if (totalLessonsToFill < totalAvailableDays) {
         console.log(totalLessonsToFill, totalAvailableDays);
-        state.autofillError = `Слишком много учебных дней для автозаполнения. Лишних ${
+        state.autofillError = `Слишком много учебных дней для автозаполнения. Лишних ${ 
           totalAvailableDays - totalLessonsToFill
         } дней.`;
         return;
