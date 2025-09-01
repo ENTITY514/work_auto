@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../shared/lib/hooks';
 import { loadKtpsFromLocalStorage, setKtpForEditing, updateKtpName, deleteKtp, SavedKtp } from '../../entities/ktp/model/slice';
-import { List, ListItem, ListItemText, IconButton, TextField } from '@mui/material';
+import { List, ListItem, ListItemText, IconButton, TextField, ListItemButton } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SaveIcon from '@mui/icons-material/Save';
@@ -20,45 +20,61 @@ export const SavedKtpList: React.FC = () => {
     dispatch(loadKtpsFromLocalStorage());
   }, [dispatch]);
 
-  const handleEdit = (id: string, name: string) => {
+  const handleEdit = (e: React.MouseEvent, id: string, name: string) => {
+    e.stopPropagation();
     setEditingId(id);
     setEditingName(name);
   };
 
-  const handleSave = (id: string) => {
+  const handleSave = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
     dispatch(updateKtpName({ id, name: editingName }));
     setEditingId(null);
   };
 
-  const handleDelete = (id: string) => {
-    dispatch(deleteKtp(id));
+  const handleDelete = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    if (window.confirm('Вы уверены, что хотите удалить этот КТП?')) {
+      dispatch(deleteKtp(id));
+    }
   };
 
   const handleOpenEditor = (id: string) => {
-    dispatch(setKtpForEditing(id));
-    navigate(`/ktp-editor/${id}`);
+    if (editingId !== id) {
+      dispatch(setKtpForEditing(id));
+      navigate(`/ktp-editor/${id}`);
+    }
   };
 
   return (
     <List>
       {savedKtps.map((ktp: SavedKtp) => (
-        <ListItem key={ktp.id} onDoubleClick={() => handleEdit(ktp.id, ktp.name)} onClick={() => handleOpenEditor(ktp.id)}>
-          {editingId === ktp.id ? (
-            <TextField
-              value={editingName}
-              onChange={(e) => setEditingName(e.target.value)}
-              onBlur={() => handleSave(ktp.id)}
-              autoFocus
-            />
-          ) : (
-            <ListItemText primary={ktp.name} />
-          )}
-          <IconButton onClick={() => (editingId === ktp.id ? handleSave(ktp.id) : handleEdit(ktp.id, ktp.name))}>
-            {editingId === ktp.id ? <SaveIcon /> : <EditIcon />}
-          </IconButton>
-          <IconButton onClick={() => handleDelete(ktp.id)}>
-            <DeleteIcon />
-          </IconButton>
+        <ListItem 
+          key={ktp.id} 
+          disablePadding
+          secondaryAction={
+            <>
+              <IconButton onClick={(e) => (editingId === ktp.id ? handleSave(e, ktp.id) : handleEdit(e, ktp.id, ktp.name))}>
+                {editingId === ktp.id ? <SaveIcon /> : <EditIcon />}
+              </IconButton>
+              <IconButton onClick={(e) => handleDelete(e, ktp.id)}>
+                <DeleteIcon />
+              </IconButton>
+            </>
+          }
+        >
+          <ListItemButton onClick={() => handleOpenEditor(ktp.id)}>
+            {editingId === ktp.id ? (
+              <TextField
+                value={editingName}
+                onChange={(e) => setEditingName(e.target.value)}
+                autoFocus
+                onClick={(e) => e.stopPropagation()} // Предотвращаем открытие редактора при клике на текстовое поле
+              />
+            ) : (
+              <ListItemText primary={ktp.name} />
+            )}
+          </ListItemButton>
         </ListItem>
       ))}
     </List>

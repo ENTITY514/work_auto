@@ -9,3 +9,10 @@ export const selectTupByIndex = (
 ): StoredTup | undefined => {
   return state.academicPlan.tupList[tupIndex];
 };
+
+export const selectTupById = (
+    state: RootState,
+    tupId: string
+  ): StoredTup | undefined => {
+    return state.academicPlan.tupList.find(tup => tup.id === tupId);
+  };

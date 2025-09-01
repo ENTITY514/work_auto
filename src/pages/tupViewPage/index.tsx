@@ -5,22 +5,23 @@ import { useParams } from "react-router-dom";
 import { Container, Typography, CircularProgress, Alert } from "@mui/material";
 import { useAppSelector } from "../../shared/lib/hooks";
 import { CreateKtpFromTup } from "../../features/CreateKtpFromTup";
-import { selectTupByIndex } from "../../entities/circulumPlan/model/selectors";
+import { selectTupById } from "../../entities/circulumPlan/model/selectors";
 import HierarchicalPlanView from "../../entities/circulumPlan/ui/hierarchPlanView";
 
 const TupViewPage: React.FC = () => {
   const { tupId } = useParams<{ tupId: string }>();
 
-  const tupIndex = tupId ? parseInt(tupId, 10) : NaN;
-
   const tupData = useAppSelector((state) =>
-    !isNaN(tupIndex) ? selectTupByIndex(state, tupIndex) : undefined
+    tupId ? selectTupById(state, tupId) : undefined
   );
   const isTupListEmpty = useAppSelector(
     (state) => state.academicPlan.tupList.length === 0
   );
 
-  if (isNaN(tupIndex)) {
+  console.log("TupViewPage tupId:", tupId);
+  console.log("TupViewPage tupData:", tupData);
+
+  if (!tupId) {
     return <Alert severity="error">Некорректный ID для ТУП.</Alert>;
   }
 
@@ -28,7 +29,7 @@ const TupViewPage: React.FC = () => {
     if (isTupListEmpty) {
       return <CircularProgress />;
     }
-    return <Alert severity="error">ТУП с таким номером не найден.</Alert>;
+    return <Alert severity="error">ТУП с таким ID не найден.</Alert>;
   }
 
   return (

@@ -14,7 +14,7 @@ function App() {
         <Routes>
           <Route path="/" element={<KtpPage />} />
           <Route path="/ktp" element={<KtpPage />} />
-          <Route path="/tup/:tupId" element={<TupViewPage />} />
+          <Route path="/tup-view/:tupId" element={<TupViewPage />} />
           <Route path="/ktp-editor/:ktpId" element={<KtpEditorPage />} />
           <Route path="/settings" element={<SettingsPage />} />{" "}
         </Routes>

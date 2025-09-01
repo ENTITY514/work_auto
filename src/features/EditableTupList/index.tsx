@@ -11,11 +11,12 @@ import {
   TextField,
   IconButton,
   Typography,
+  Box,
 } from "@mui/material";
 import BackupTableIcon from "@mui/icons-material/BackupTable";
 import EditIcon from "@mui/icons-material/Edit";
-import { renameTup } from "../../entities/circulumPlan/model/slice";
-import { createKtpFromTup } from "../../entities/ktp/model/slice";
+import DeleteIcon from "@mui/icons-material/Delete";
+import { renameTup, removeTup } from "../../entities/circulumPlan/model/slice";
 import { useAppDispatch, useAppSelector } from "../../shared/lib/hooks";
 
 export const EditableTupList: React.FC = () => {
@@ -29,11 +30,13 @@ export const EditableTupList: React.FC = () => {
     setEditingTupId(null);
   };
 
-  const handleCreateKtp = async (tupId: string) => {
-    const resultAction = await dispatch(createKtpFromTup(tupId));
-    if (createKtpFromTup.fulfilled.match(resultAction)) {
-      const newKtp = resultAction.payload;
-      navigate(`/ktp-editor/${newKtp.id}`);
+  const handleOpenTupView = (tupId: string) => {
+    navigate(`/tup-view/${tupId}`);
+  };
+
+  const handleDeleteTup = (tupId: string) => {
+    if (window.confirm("Вы уверены, что хотите удалить этот ТУП?")) {
+      dispatch(removeTup(tupId));
     }
   };
 
@@ -47,14 +50,19 @@ export const EditableTupList: React.FC = () => {
 
   return (
     <List>
-      {tupList.map((tup, index) => (
+      {tupList.map((tup) => (
         <ListItem
           key={tup.id}
           disablePadding
           secondaryAction={
-            <IconButton edge="end" onClick={() => setEditingTupId(tup.id)}>
-              <EditIcon />
-            </IconButton>
+            <Box>
+              <IconButton edge="end" onClick={() => setEditingTupId(tup.id)}>
+                <EditIcon />
+              </IconButton>
+              <IconButton edge="end" onClick={() => handleDeleteTup(tup.id)}>
+                <DeleteIcon />
+              </IconButton>
+            </Box>
           }
         >
           {editingTupId === tup.id ? (
@@ -75,7 +83,7 @@ export const EditableTupList: React.FC = () => {
               sx={{ ml: 2, flexGrow: 1 }}
             />
           ) : (
-            <ListItemButton onClick={() => handleCreateKtp(index.toString())}>
+            <ListItemButton onClick={() => handleOpenTupView(tup.id)}>
               <ListItemIcon>
                 <BackupTableIcon />
               </ListItemIcon>

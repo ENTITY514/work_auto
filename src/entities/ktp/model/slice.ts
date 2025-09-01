@@ -63,9 +63,8 @@ export const createKtpFromTup = createAsyncThunk<
 >("ktpEditor/createFromTup", (tupId, { getState, rejectWithValue }) => {
   const state = getState();
   const allTups = state.academicPlan.tupList;
-  const tupIndex = parseInt(tupId, 10);
 
-  const sourceTup = allTups[tupIndex];
+  const sourceTup = allTups.find(t => t.id === tupId);
   if (!sourceTup) {
     return rejectWithValue("Исходный ТУП не найден.");
   }
@@ -391,13 +390,19 @@ const ktpEditorSlice = createSlice({
     },
     setKtpForEditing(state, action: PayloadAction<string>) {
       const ktpId = action.payload;
-      const ktp = state.savedKtps.find(k => k.id === ktpId);
+      state.status = "loading";
+      const ktp = state.savedKtps.find((k) => k.id === ktpId);
       if (ktp) {
         state.plan = ktp.plan;
         state.totalHours = ktp.totalHours;
         state.quarterWorkHours = ktp.quarterWorkHours;
         state.sourceTupName = ktp.name;
         state.className = ktp.className;
+        state.status = "succeeded";
+        state.error = null;
+      } else {
+        state.status = "failed";
+        state.error = `КТП с ID "${ktpId}" не найден.`;
       }
     },
     updateKtpName(state, action: PayloadAction<{ id: string; name: string }>) {
@@ -424,6 +429,16 @@ const ktpEditorSlice = createSlice({
       } catch (error) {
         console.error("Failed to delete KTP from localStorage", error);
       }
+    },
+    resetKtpEditor(state) {
+      state.plan = [];
+      state.sourceTupName = "";
+      state.className = "";
+      state.totalHours = 0;
+      state.quarterWorkHours = { q1: 0, q2: 0, q3: 0, q4: 0 };
+      state.status = "idle";
+      state.error = null;
+      state.autofillError = null;
     },
   },
 
@@ -464,6 +479,7 @@ export const {
   setKtpForEditing,
   updateKtpName,
   deleteKtp,
+  resetKtpEditor,
 } = ktpEditorSlice.actions;
 
 export const ktpEditorReducer = ktpEditorSlice.reducer;

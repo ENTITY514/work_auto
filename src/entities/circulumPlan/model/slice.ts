@@ -37,16 +37,19 @@ const academicPlanSlice = createSlice({
         planData: action.payload,
       };
       state.tupList.push(newTup);
+      localStorage.setItem("academicPlanData", JSON.stringify(state.tupList));
     },
     renameTup(state, action: PayloadAction<{ id: string; newName: string }>) {
       const { id, newName } = action.payload;
       const tup = state.tupList.find(t => t.id === id);
       if (tup) {
         tup.name = newName;
+        localStorage.setItem("academicPlanData", JSON.stringify(state.tupList));
       }
     },
     removeTup(state, action: PayloadAction<string>) {
         state.tupList = state.tupList.filter(t => t.id !== action.payload);
+        localStorage.setItem("academicPlanData", JSON.stringify(state.tupList));
     }
   },
 });

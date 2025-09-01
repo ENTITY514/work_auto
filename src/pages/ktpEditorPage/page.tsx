@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import {
   Container,
   Typography,
@@ -19,6 +19,8 @@ import {
 } from "@mui/material";
 import { useAppSelector, useAppDispatch } from "../../shared/lib/hooks";
 import {
+  resetKtpEditor, // Импортируем reset
+  createKtpFromTup,
   autofillDates,
   clearAutofillError,
   setTotalHours,
@@ -43,9 +45,10 @@ const toYYYYMMDD = (date: Date) => {
 
 const KtpEditorPage: React.FC = () => {
   const { ktpId } = useParams<{ ktpId: string }>();
+  const navigate = useNavigate(); // Добавляем navigate
   const dispatch = useAppDispatch();
 
-  const { status, error, sourceTupName, plan, autofillError, totalHours, quarterWorkHours, className } =
+  const { savedKtps, status, error, sourceTupName, plan, autofillError, totalHours, quarterWorkHours, className } =
     useAppSelector((state) => state.ktpEditor);
   const calendarState = useAppSelector((state) => state.calendar);
   const activeProfile = calendarState.profiles.find(
@@ -67,9 +70,22 @@ const KtpEditorPage: React.FC = () => {
   const [localTotalHours, setLocalTotalHours] = useState(totalHours.toString());
 
   useEffect(() => {
-    if (ktpId) {
-      dispatch(setKtpForEditing(ktpId));
+    // Эта логика запускается только если у нас есть ID и редактор в "чистом" состоянии
+    if (ktpId && status === 'idle') {
+      const existingKtp = savedKtps.find((k) => k.id === ktpId);
+      if (existingKtp) {
+        dispatch(setKtpForEditing(ktpId));
+      } else {
+        dispatch(createKtpFromTup(ktpId));
+      }
     }
+  }, [dispatch, ktpId, savedKtps, status]);
+
+  // Отдельный эффект для очистки состояния при смене ID или уходе со страницы
+  useEffect(() => {
+    return () => {
+      dispatch(resetKtpEditor());
+    };
   }, [dispatch, ktpId]);
 
   useEffect(() => {
