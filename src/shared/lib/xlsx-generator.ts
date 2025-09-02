@@ -27,23 +27,39 @@ export const generateXlsx = (ktp: IKtpLesson[], fileName: string) => {
     }
 
     if (lesson.rowType === LessonRowType.SOCH) {
-      const topic = `Суммативное оценивание за ${currentQuarter} четверть`;
-      data.push([formatDate(lesson.date), topic, '']);
+      let topic = `Суммативное оценивание за ${currentQuarter} четверть`;
+      topic = `${lesson.lessonNumber}. ${topic}`;
+      data.push([formatDate(lesson.date), topic, ""]);
       i++;
       continue;
     }
 
     // Check for merged lessons
-    if (lesson.date && i + 1 < ktp.length && ktp[i+1].date === lesson.date) {
-      const nextLesson = ktp[i+1];
-      const reason = lesson.notes || nextLesson.notes || '';
-      const mergedTheme = `${lesson.lessonTopic} / ${nextLesson.lessonTopic} ${reason ? `(${reason})` : ''}`;
-      data.push([formatDate(lesson.date), mergedTheme, '']);
-      i += 2; // Skip next lesson
+    if (lesson.date && i + 1 < ktp.length && ktp[i + 1].date === lesson.date) {
+      const mergedLessons = [lesson];
+      let reason = lesson.notes || "";
+
+      // Collect all consecutive lessons with the same date
+      let j = i + 1;
+      while (j < ktp.length && ktp[j].date === lesson.date) {
+        mergedLessons.push(ktp[j]);
+        if (ktp[j].notes) reason = ktp[j].notes; // Use the note from any of the merged lessons
+        j++;
+      }
+
+      const lessonNumbers = mergedLessons.map((l) => l.lessonNumber).join(", ");
+      const lessonTopics = mergedLessons.map((l) => l.lessonTopic).join(" / ");
+      const reasonText = reason ? `(${reason})` : "";
+
+      const mergedTheme = `${lessonNumbers}. ${lessonTopics} ${reasonText}`;
+      data.push([formatDate(lesson.date), mergedTheme, ""]);
+
+      i += mergedLessons.length; // Advance the loop counter by the number of merged lessons
     } else {
+      const lessonTopicWithNumber = `${lesson.lessonNumber}. ${lesson.lessonTopic}`;
       const lessonHours = lesson.hours || 1;
       for (let j = 0; j < lessonHours; j++) {
-        data.push([formatDate(lesson.date), lesson.lessonTopic, '']);
+        data.push([formatDate(lesson.date), lessonTopicWithNumber, ""]);
       }
       i++;
     }
