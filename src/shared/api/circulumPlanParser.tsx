@@ -9,8 +9,8 @@ import {
   LearningObjective,
 } from "../../entities/circulumPlan/model/types";
 
-const REGEX_QUARTER = /(^\d+) четверть/i;
-const REGEX_REPETITION = /повторение/i;
+const REGEX_QUARTER = /(^\d+)[\s-]+(четверть|тоқсан)/i;
+const REGEX_REPETITION = /(повторение|қайталау)/i;
 const REGEX_OBJECTIVE = /(^[\d\.]+)\s(.+)/;
 
 /**
