@@ -33,8 +33,8 @@ const Header: React.FC = () => {
           <Button color="inherit" component={RouterLink} to="/ktp">
             КТП
           </Button>
-          <Button color="inherit" component={RouterLink} to="/grade-analyzer">
-            Анализ журнала
+          <Button color="inherit" component={RouterLink} to="/grade-journal">
+            Журнал оценок
           </Button>
           <Button color="inherit" component={RouterLink} to="/settings">
             Настройки
