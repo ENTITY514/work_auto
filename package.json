@@ -20,6 +20,7 @@
     "@types/uuid": "^10.0.0",
     "docx": "^9.5.1",
     "file-saver": "^2.0.5",
+    "mammoth": "^1.10.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-redux": "^9.2.0",

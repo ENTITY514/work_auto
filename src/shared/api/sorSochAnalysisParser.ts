@@ -1,29 +1,42 @@
 import * as XLSX from 'xlsx';
+import mammoth from 'mammoth';
 
-// This parser's only job is to log the structure of the uploaded file.
-export const parseSorSochAnalysis = (file: File): Promise<void> => {
+/**
+ * Parses .xlsx, .xls, or .docx files and returns their content as a structured JSON string.
+ * @param file The file to parse.
+ * @returns A promise that resolves with the JSON string representation of the file content.
+ */
+export const parseSorSochAnalysis = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
 
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         const data = e.target?.result;
-        if (!data) {
-          throw new Error("Не удалось прочитать файл.");
+        if (!data) throw new Error("Не удалось прочитать файл.");
+
+        let jsonData: any;
+        const fileExtension = file.name.split('.').pop()?.toLowerCase();
+
+        if (fileExtension === 'xlsx' || fileExtension === 'xls') {
+          const workbook = XLSX.read(data, { type: "buffer" });
+          const sheetData: { [sheetName: string]: any } = {};
+
+          workbook.SheetNames.forEach(sheetName => {
+              const worksheet = workbook.Sheets[sheetName];
+              sheetData[sheetName] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+          });
+          jsonData = sheetData;
+        } else if (fileExtension === 'docx') {
+            const result = await mammoth.extractRawText({ arrayBuffer: data as ArrayBuffer });
+            jsonData = { content: result.value };
+        } else {
+            throw new Error(`Неподдерживаемый тип файла: .${fileExtension}`);
         }
 
-        const workbook = XLSX.read(data, { type: "buffer" });
-        
-        console.log("--- SOR/SOCH Analysis Parser ---");
-
-        workbook.SheetNames.forEach(sheetName => {
-            console.log(`--- Parsing Sheet: ${sheetName} ---`);
-            const worksheet = workbook.Sheets[sheetName];
-            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-            console.log(`Raw JSON data for sheet ${sheetName}:`, JSON.stringify(jsonData, null, 2));
-        });
-
-        resolve();
+        const jsonString = JSON.stringify(jsonData, null, 2);
+        console.log("--- SOR/SOCH Analysis Parser Result ---", jsonString);
+        resolve(jsonString);
 
       } catch (err: any) {
         console.error("Критическая ошибка парсинга документа анализа СОР/СОЧ:", err);
