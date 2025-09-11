@@ -5,6 +5,7 @@ import { useAppDispatch, useAppSelector } from '../../shared/lib/hooks';
 import { parseGradeJournal } from '../../shared/api/gradeJournalParser';
 import { setJournalData, setJournalLoading, setJournalError } from '../../entities/gradeJournal/model/slice';
 import GradeJournalTable from '../../widgets/GradeJournalTable';
+import SorSochAnalysis from '../../widgets/SorSochAnalysis';
 
 const GradeJournalPage: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -45,7 +46,10 @@ const GradeJournalPage: React.FC = () => {
         {status === 'loading' && <CircularProgress />}
         {status === 'failed' && <Alert severity="error">{error}</Alert>}
         {status === 'succeeded' && journalData && (
-          <GradeJournalTable data={journalData} />
+          <>
+            <GradeJournalTable data={journalData} />
+            <SorSochAnalysis />
+          </>
         )}
       </Box>
     </Container>
