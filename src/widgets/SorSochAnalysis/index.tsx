@@ -15,7 +15,7 @@ import {
   Grid,
 } from '@mui/material';
 
-import { generateSorSochAnalysisDocx } from '../../shared/lib/word-generator';
+// import { generateSorSochAnalysisDocx } from '../../shared/lib/word-generator';
 
 // Mock data provided by the user
 const initialAnalysisData = {
@@ -80,7 +80,7 @@ const SorSochAnalysis: React.FC = () => {
   };
 
   const handleDownload = () => {
-    generateSorSochAnalysisDocx(analysisData);
+    // generateSorSochAnalysisDocx(analysisData);
   };
 
   return (
@@ -167,7 +167,7 @@ const SorSochAnalysis: React.FC = () => {
       </Box>
 
       <Box sx={{ mt: 3, textAlign: 'right' }}>
-        <Button variant="contained" color="primary" onClick={handleDownload}>
+        <Button variant="contained" color="primary" onClick={handleDownload} disabled>
           Скачать DOCX
         </Button>
       </Box>
